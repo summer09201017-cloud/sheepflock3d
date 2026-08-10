@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d1f2b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%81%3C/text%3E%3C/svg%3E" />
+    <title>牧羊人與羊群 3D・尋羊集羊護羊 Shepherd &amp; Flock 3D</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <canvas id="gameCanvas" aria-label="牧羊人與羊群 3D 遊戲畫面"></canvas>
+
+      <div class="top-bar">
+        <div class="score-card team-home">
+          <span class="score-label">牧人(我)</span>
+          <strong id="myScoreLabel">100</strong>
+        </div>
+        <div class="center-board">
+          <div class="clock-stack period-stack">
+            <span class="mini-label">模式</span>
+            <strong id="modeCode">護羊之戰</strong>
+          </div>
+          <div class="clock-stack">
+            <span class="mini-label">回合</span>
+            <strong id="passLabel">0</strong>
+            <span class="stack-subtext" id="gapLabel">—</span>
+          </div>
+          <div class="clock-stack accent">
+            <span class="mini-label">上一擊</span>
+            <strong id="lastPassLabel">—</strong>
+            <span class="stack-subtext" id="phaseLabel">主選單</span>
+          </div>
+        </div>
+        <div class="score-card team-away">
+          <span class="score-label">野獸/尋回</span>
+          <strong id="aiScoreLabel">100</strong>
+        </div>
+      </div>
+
+      <button id="pauseButton" class="pause-fab">暫停</button>
+
+      <div class="message-ribbon" id="statusMessage">選擇模式與野獸陣容後開始。</div>
+      <div class="commentary-bar" id="commentaryBar" hidden></div>
+
+      <aside class="side-panel">
+        <div class="panel-block hero-panel">
+          <p class="eyebrow">LUKE 15 × 1 SAMUEL 17</p>
+          <h1>牧羊人與羊群 3D</h1>
+          <p class="panel-copy">
+            在牧場漫遊尋回迷失的羊(路15),每一隻長相都不同、取了名字就跟著你(約10:3-4);野獸來叼羊時,像大衛一樣追上去,帶著羊群的恩賜倚靠耶和華護住羊羔——不流血、點到為止!
+          </p>
+        </div>
+
+        <div class="panel-block compact-grid">
+          <div>
+            <span class="mini-label">遊戲模式</span>
+            <strong id="modeLabel">護羊之戰</strong>
+          </div>
+          <div>
+            <span class="mini-label">難度</span>
+            <strong id="difficultyLabel">標準</strong>
+          </div>
+          <div>
+            <span class="mini-label">與野獸距離</span>
+            <strong id="gapSideLabel">—</strong>
+          </div>
+          <div>
+            <span class="mini-label">移動速度</span>
+            <strong id="speedLabel">0 km/h</strong>
+          </div>
+          <div>
+            <span class="mini-label">音效狀態</span>
+            <strong id="audioStatus">開啟</strong>
+          </div>
+          <div>
+            <span class="mini-label">戰績</span>
+            <strong id="saveStatus">尚無</strong>
+          </div>
+        </div>
+
+        <div class="panel-block meter-block">
+          <div class="meter-copy">
+            <span class="mini-label">移動速度</span>
+            <strong id="speedMeterText">按住前進</strong>
+          </div>
+          <div class="meter-track">
+            <div id="speedMeterFill" class="meter-fill shot"></div>
+          </div>
+
+          <div class="meter-copy stamina-copy">
+            <span class="mini-label">重拳冷卻(滿=可出手)</span>
+            <strong id="windowValue">—</strong>
+          </div>
+          <div class="meter-track stamina">
+            <div id="windowFill" class="meter-fill stamina-fill"></div>
+          </div>
+        </div>
+
+        <div class="panel-block action-buttons">
+          <button id="menuButton" class="primary">首頁選單</button>
+          <button id="loadButton">看戰績</button>
+          <button id="audioButton">音效開啟</button>
+          <button id="cameraButton">視角切換</button>
+        </div>
+
+        <div class="panel-block">
+          <button id="installButton" class="install-button" hidden>安裝到手機</button>
+          <p class="install-hint" id="installHint">
+            Android 可直接安裝；iPhone 可用分享選單加入主畫面。
+          </p>
+        </div>
+
+        <div class="panel-block instructions">
+          <p class="mini-label">操作</p>
+          <p>走位: WASD(前進/後退/轉向)｜衝刺: 按住 Shift</p>
+          <p>輕拳: J(快、傷害低)</p>
+          <p>重拳: K(可蓄力,慢、傷害高、命中擊退;點畫面/空白鍵亦可)</p>
+          <p>聖靈金光: 長按重拳鍵 0.6 秒放開——金色光波,可一次穿透多隻野獸(撒上16:13)!</p>
+          <p>格擋: 按住 C——正面舉臂防禦,近戰減傷;剛舉起被打=完美格擋!</p>
+          <p>自動面向: 自動轉身對準最近的野獸(A/D 或前進時不干預)</p>
+          <p>蜂蜜: 場上偶爾出現野地的蜂蜜,走近即可回血 25%(多獸時更常出現)</p>
+          <p>小心: 紅色扇形預告代表野獸即將撲擊,快閃開!熊出手慢但更痛!</p>
+          <p>視角: V｜暫停: Esc / P</p>
+        </div>
+      </aside>
+
+      <div class="touch-layer" id="touchControls">
+        <div class="dpad">
+          <button data-action="up" aria-label="前進">▲</button>
+          <button data-action="left" aria-label="左轉">◀</button>
+          <button data-action="right" aria-label="右轉">▶</button>
+          <button data-action="down" aria-label="後退">▼</button>
+        </div>
+        <div class="action-pad">
+          <button data-action="lightAttack">輕拳</button>
+          <button data-action="heavyAttack" class="shoot">重拳</button>
+          <button data-action="action">格擋</button>
+          <button data-action="sprint" class="sprint">衝刺</button>
+          <button data-action="camera">視角</button>
+        </div>
+      </div>
+
+      <div class="overlay-shell" id="matchOverlay" aria-live="polite">
+        <div class="overlay-card">
+          <p class="eyebrow" id="overlayEyebrow">比賽暫停</p>
+          <h2 id="overlayTitle">暫停中</h2>
+          <p id="overlayText" class="overlay-copy">準備好再上場。</p>
+          <div class="button-row overlay-actions">
+            <button id="resumeButton" class="primary">繼續比賽</button>
+            <button id="overlayMenuButton">回到首頁</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-screen visible" id="homeScreen" aria-live="polite">
+        <div class="home-backdrop"></div>
+        <div class="home-content">
+          <div class="home-hero">
+            <p class="eyebrow">LUKE 15・路加福音十五章 × 撒母耳記上十七章</p>
+            <h2>牧羊人與羊群——尋羊、集羊、護羊!</h2>
+            <p>
+              「找著了,就歡歡喜喜地扛在肩上,回到家裡。」(路加福音十五章五節)在牧場漫遊尋回迷失的羊——每一隻長相都不一樣,取了名字就一直跟著你(約翰福音十章:他按著名叫自己的羊);野獸來了,帶你的羊一起上——鈴鐺羊、絨毛羊、快腿羊、詩歌羊各有恩賜,倚靠耶和華護住羊群!
+            </p>
+            <div class="button-row" style="margin-top:8px">
+              <button id="dexButton" type="button">🐑 我的羊圈(圖鑑)</button>
+            </div>
+          </div>
+
+          <div class="home-grid">
+            <section class="home-card">
+              <p class="eyebrow">遊戲模式</p>
+              <div class="mode-card-grid" id="modeCardGrid">
+                <button class="mode-card" data-mode="seek">
+                  <strong>🐑 牧場漫遊・尋羊</strong>
+                  <span>尋回迷失的羊,取名字、蒐集羊圈,羊群跟著你走</span>
+                </button>
+                <button class="mode-card" data-mode="duel">
+                  <strong>護羊之戰</strong>
+                  <span>牧人 100 血,打光野獸血量獲勝;出戰羊會幫你</span>
+                </button>
+                <button class="mode-card" data-mode="epic">
+                  <strong>與獸纏鬥</strong>
+                  <span>各 300 血馬拉松,戰滿三百回合以血量判定</span>
+                </button>
+                <button class="mode-card" data-mode="practice">
+                  <strong>牧場練習</strong>
+                  <span>野獸只走位不攻擊,自由練習輕重拳手感</span>
+                </button>
+              </div>
+              <p id="modeDescription" class="mode-description"></p>
+            </section>
+
+            <section class="home-card">
+              <p class="eyebrow">比賽設定</p>
+              <label class="field-label" for="beastSelect">野獸陣容(BOSS 種類×數量)</label>
+              <select id="beastSelect">
+                <option value="lion1">🦁 獅子 ×1</option>
+                <option value="lion2">🦁🦁 獅子 ×2</option>
+                <option value="lion3">🦁🦁🦁 獅子 ×3</option>
+                <option value="bear1">🐻 熊 ×1</option>
+                <option value="bear2">🐻🐻 熊 ×2</option>
+                <option value="bear3">🐻🐻🐻 熊 ×3</option>
+                <option value="both">🦁🐻 獅+熊 雙獸夾攻</option>
+              </select>
+
+              <label class="field-label" for="menuDifficultySelect">難度</label>
+              <select id="menuDifficultySelect">
+                <option value="kids">幼兒（超簡單）</option>
+                <option value="child">兒童（簡單）</option>
+                <option value="easy">入門</option>
+                <option value="normal">標準</option>
+                <option value="hard">全力獸王</option>
+                <option value="death">死神(黑獸)⚠ 膽小勿入</option>
+              </select>
+
+              <label class="field-label" for="audioSelect">音效與播報</label>
+              <select id="audioSelect">
+                <option value="on">開啟</option>
+                <option value="off">靜音</option>
+              </select>
+
+              <div class="home-mode-meta">
+                <div>
+                  <span class="mini-label">模式摘要</span>
+                  <strong id="modeMetaTitle">護羊之戰</strong>
+                </div>
+                <div>
+                  <span class="mini-label">目標</span>
+                  <strong id="modeMetaGoal">打光野獸血量</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="button-row home-actions">
+            <button id="startMatchButton" class="primary">出發!</button>
+            <button id="continueSavedButton">看戰績</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🐑 羊圈圖鑑(蒐集牆+伴行/出戰選擇+匯出匯入=跨站 B 案接口) -->
+    <div class="sheep-modal" id="dexModal" hidden>
+      <div class="sheep-modal-panel">
+        <div class="sheep-modal-head">
+          <strong>🐑 我的羊圈</strong>
+          <span id="dexCount" class="dex-count"></span>
+          <button id="dexExportButton" type="button">匯出</button>
+          <button id="dexImportButton" type="button">匯入</button>
+          <button id="dexCloseButton" type="button" class="primary">關閉</button>
+        </div>
+        <p class="dex-hint">🚶 伴行=漫遊時跟著你(最多 5)・⚔️ 出戰=打野獸時幫你(最多 3)。「他按著名叫自己的羊,把羊領出來。」(約翰福音十章三節)</p>
+        <div class="dex-grid" id="dexGrid"></div>
+        <textarea id="dexIoBox" class="dex-io" hidden placeholder="貼上另一台裝置匯出的羊圈 JSON,再按一次「匯入」"></textarea>
+      </div>
+    </div>
+
+    <!-- 🐑 尋回取名(路15:5) -->
+    <div class="sheep-modal" id="nameModal" hidden>
+      <div class="sheep-modal-panel name-panel">
+        <p class="eyebrow">找著了!(路加福音十五章五節)</p>
+        <h3>給這隻羊取個名字吧!</h3>
+        <canvas id="namePortrait" width="120" height="120"></canvas>
+        <p id="nameGiftLine" class="dex-hint"></p>
+        <div class="name-suggest" id="nameSuggest"></div>
+        <input id="nameInput" type="text" maxlength="8" placeholder="或自己輸入名字(最多 8 個字)" />
+        <div class="button-row">
+          <button id="nameConfirmButton" class="primary" type="button">就叫這個名字!</button>
+        </div>
+      </div>
+    </div>
+
+      <div class="power-panel-big" id="bigPower" hidden><span id="bigPowerLabel">重拳出手</span><div class="big-track"><div class="big-fill" id="bigPowerFill"></div></div></div>
+    <!-- 死神模式恐怖演出層(只在 death 難度觸發;beast-boss-kit §3) -->
+    <div id="fangFlash" hidden aria-hidden="true"><div class="fang top"></div><div class="fang bottom"></div></div>
+    <div id="darkHand" hidden aria-hidden="true"><div class="dh-heart">❤</div><div class="dh-arm"><div class="dh-palm"></div><div class="dh-f f1"></div><div class="dh-f f2"></div><div class="dh-f f3"></div><div class="dh-f f4"></div></div></div>
+    <script type="module" src="/src/main.js"></script>
+  <script>
+  // play-stats 三層匿名計數(lobby-play-rank §3/§4):開啟 10 分去重;-start/-done 不去重;-done 帶 t=秒。零個資。
+  window.psPing = function (key, t) {
+    try {
+      // 雙平台通用:只擋本機開發,任何正式站(netlify.app/pages.dev/自訂網域)都計數
+      if (['localhost', '127.0.0.1'].includes(location.hostname)) return;
+      var u = 'https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=' + key + (t ? '&t=' + t : '');
+      if (navigator.sendBeacon) navigator.sendBeacon(u); else fetch(u, { mode: 'no-cors' });
+    } catch (_) {}
+  };
+  try {
+    var psK = 'ps-last-davidbeasts3d';
+    var psLast = parseInt(localStorage.getItem(psK) || '0', 10);
+    if (Date.now() - psLast > 600000) { localStorage.setItem(psK, String(Date.now())); window.psPing('sheepflock3d'); }
+  } catch (_) { window.psPing('sheepflock3d'); }
+  /* ⏱ 真實停留打點 -dwell(07-25 起全艦隊標配;2026-07-30 補上)——
+     這站本來**只有 -done 沒有 -dwell**,少這一欄統計會「無聲」缺一塊,
+     要好幾天後看 /stats 才會發現。部署守門 dwell-beacon-guard 當場攔下來,是真的漏不是誤判。
+     ★ 遊戲站用「開頁到第一次離開」就夠;**閱讀站不可照抄**(要用 -dwlast + 累計可見時間,
+       否則手機鎖屏會系統性低估)—— 見 skill play-stats-dwell。
+     ★ sent 旗標必要:pagehide 與 visibilitychange 兩個事件都會觸發,不擋就重複計一次。 */
+  (function () {
+    var t0 = Date.now(), sent = false;
+    var bye = function () {
+      if (sent) return; sent = true;
+      window.psPing('sheepflock3d-dwell', Math.round((Date.now() - t0) / 1000));
+    };
+    addEventListener('pagehide', bye);
+    addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') bye(); });
+  })();
+</script>
+</body>
+</html>

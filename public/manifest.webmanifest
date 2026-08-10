@@ -1,0 +1,24 @@
+{
+ "name": "牧羊人與羊群 3D・尋羊集羊護羊",
+ "short_name": "牧羊人與羊群",
+ "description": "撒母耳記上十七章——少年牧人大衛,倚靠耶和華,在伯利恆曠野追打叼走羊羔的獅子和熊;可選獅、熊或獅熊夾攻,一至三隻。",
+ "start_url": "/",
+ "display": "standalone",
+ "background_color": "#09131d",
+ "theme_color": "#0d1f2b",
+ "orientation": "landscape",
+ "icons": [
+  {
+   "src": "/icon.svg",
+   "sizes": "any",
+   "type": "image/svg+xml",
+   "purpose": "any"
+  },
+  {
+   "src": "/icon-maskable.svg",
+   "sizes": "any",
+   "type": "image/svg+xml",
+   "purpose": "maskable"
+  }
+ ]
+}
