@@ -421,6 +421,32 @@ function makeShepherdTsum() {
   };
   const leftArm = mkArm(-0.46);
   const rightArm = mkArm(0.46);
+
+  // 🪵 你的杖、你的竿(詩23:4)——竿=頂端彎鉤的長牧杖握在左手(跟著手臂擺動;
+  // 護胸姿勢下反轉 rotation.x 讓竿平時直立、格擋時自然舉起),杖=短棒插在右腰帶;純裝飾,戰鬥仍是赤手
+  const woodMat = tmat(0x8a5a2e, 0.85);
+  const staff = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 2.05, 8), woodMat);
+  shaft.position.y = 0.28;
+  staff.add(shaft);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 8, 14, Math.PI * 1.25), woodMat);
+  hook.rotation.y = Math.PI / 2;
+  hook.position.set(0, 1.305, 0.16);
+  staff.add(hook);
+  staff.position.set(0, -0.1, 0.05);
+  staff.rotation.x = 0.98; // 抵銷護胸臂角(-0.8 pivot + -0.18 joint),竿身回到垂直
+  leftArm.end.add(staff);
+  const rod = new THREE.Group();
+  const rodShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.5, 7), woodMat);
+  rodShaft.position.y = 0.25;
+  rod.add(rodShaft);
+  const rodKnob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), woodMat);
+  rodKnob.position.y = 0.52;
+  rod.add(rodKnob);
+  rod.position.set(0.4, 0.5, -0.14);
+  rod.rotation.z = -0.5;
+  rig.add(rod);
+
   const shoeMat = tmat(0xb08a52, 0.85);
   const mkLeg = (x) => {
     const leg = createLimb({
@@ -1254,6 +1280,7 @@ export class WarriorGame {
       this.lost = null;
       this.lostTimer = 2.5;
       this.foundCount = 0;
+      this._penHint = false;
       this.phase = "battle"; // 漫遊不設 gate,直接開走
       this.message = "牧場漫遊——聽!曠野裡有羊在咩咩叫,走過去找牠。WASD 走路、Shift 快跑。";
       this.emitEvent("roam-start", { flock: this.flock.length });
@@ -1282,6 +1309,28 @@ export class WarriorGame {
       const rec = byId.get(id);
       if (rec) this._addFlockEntity(rec);
     }
+    // 🐑 羊圈裡的羊:已尋回但這次沒帶出門的,待在東側石圈裡休息(看得到自己的收藏;上限 10)
+    for (const p of this.penSheep || []) this.scene.remove(p.group);
+    this.penSheep = [];
+    if (this.roam || this.mode.roam) {
+      const F = ARENA_HALF + 2;
+      const out = new Set(ids);
+      const resting = dex.sheep.filter((s) => !out.has(s.id)).slice(0, 10);
+      resting.forEach((rec, i) => {
+        const p = makeGeneSheep(rec.genes);
+        const a = (i / 10) * Math.PI * 2 + 0.4;
+        const r = 1.1 + (i % 3) * 0.95;
+        p.group.position.set(F + 7 + Math.cos(a) * r, 0, F * 0.4 + Math.sin(a) * r);
+        p.group.rotation.y = Math.random() * Math.PI * 2;
+        this.scene.add(p.group);
+        this.penSheep.push(p);
+      });
+    }
+  }
+
+  // 🐑 圖鑑改了伴行名單 → 漫遊中立即重建場上羊與圈中羊;戰鬥中不重建(絨毛盾等冷卻會被洗掉),下一場才生效
+  refreshFlock() {
+    if (this.roam && this.phase === "battle") this._setupFlockForMatch();
   }
 
   _addFlockEntity(rec) {
@@ -1338,6 +1387,15 @@ export class WarriorGame {
   // ---------- 🐑 漫遊:迷羊出現與尋回(路15:4-6) ----------
   updateRoam(dt) {
     if (this.holdRoam) return;
+    // 走近東側石圈=看見圈中休息的羊,提示可開圖鑑挑選(每次漫遊只提示一次)
+    if (!this._penHint) {
+      const F = ARENA_HALF + 2;
+      if (Math.hypot(this.my.pos.x - (F + 7), this.my.pos.z - F * 0.4) < 11.5) {
+        this._penHint = true;
+        this.message = "前面就是羊圈!已尋回的羊在圈裡休息——按「🐑 羊圈」查看與挑選伴行的羊。";
+        this.pushHud();
+      }
+    }
     if (!this.lost) {
       this.lostTimer -= dt;
       if (this.lostTimer <= 0) this._spawnLostSheep();
@@ -1784,8 +1842,8 @@ export class WarriorGame {
   }
 
   cycleCameraView() {
-    this.cameraView = (this.cameraView + 1) % 4;
-    const names = ["跟隨視角", "側面轉播", "高空俯瞰", "第一人稱"];
+    this.cameraView = (this.cameraView + 1) % 5;
+    const names = ["跟隨視角", "側身跟隨", "側面轉播", "高空俯瞰", "第一人稱"];
     this.message = `視角:${names[this.cameraView]}。`;
     this.pushHud();
   }
@@ -2505,9 +2563,15 @@ export class WarriorGame {
       desiredPos = this.my.pos.clone().addScaledVector(fwd, -5.2).setY(3.0);
       desiredLook = this.my.pos.clone().addScaledVector(fwd, 6).setY(1.3);
     } else if (this.cameraView === 1) {
+      // 側身跟隨:鏡頭掛在牧人側面同步移動——看得到牧人的側身、手上的竿與腰間的杖,不只後腦
+      const fwd = new THREE.Vector3(Math.sin(this.my.heading), 0, Math.cos(this.my.heading));
+      const side = new THREE.Vector3(-Math.cos(this.my.heading), 0, Math.sin(this.my.heading));
+      desiredPos = this.my.pos.clone().addScaledVector(side, 5.0).addScaledVector(fwd, 0.8).setY(2.1);
+      desiredLook = this.my.pos.clone().addScaledVector(fwd, 1.2).setY(1.15);
+    } else if (this.cameraView === 2) {
       desiredPos = new THREE.Vector3(ARENA_HALF + 5, 3.2, clamp(mid.z, -10, 10));
       desiredLook = mid.clone().setY(1.2);
-    } else if (this.cameraView === 2) {
+    } else if (this.cameraView === 3) {
       desiredPos = new THREE.Vector3(mid.x, 22, mid.z + 2);
       desiredLook = mid.clone().setY(0.5);
     } else {

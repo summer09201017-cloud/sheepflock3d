@@ -54,6 +54,8 @@ const ui = {
   continueSavedButton: document.querySelector("#continueSavedButton"),
   // 🐑 羊圈圖鑑+尋回取名
   dexButton: document.querySelector("#dexButton"),
+  dexButtonGame: document.querySelector("#dexButtonGame"),
+  dexFab: document.querySelector("#dexFab"),
   dexModal: document.querySelector("#dexModal"),
   dexGrid: document.querySelector("#dexGrid"),
   dexCount: document.querySelector("#dexCount"),
@@ -144,10 +146,12 @@ function openHomeScreen() {
   audio.stopCrowd();
   syncGameConfigurationToMenu();
   ui.homeScreen.classList.add("visible");
+  ui.dexFab.hidden = true;
 }
 
 function closeHomeScreen() {
   ui.homeScreen.classList.remove("visible");
+  ui.dexFab.hidden = false;
 }
 
 function unlockAudio() {
@@ -438,16 +442,26 @@ function renderDex() {
   }
 }
 
-ui.dexButton.addEventListener("click", () => {
+function openDex() {
   unlockAudio();
   audio.uiTap();
   ui.dexIoBox.hidden = true;
   renderDex();
   ui.dexModal.hidden = false;
+}
+ui.dexButton.addEventListener("click", openDex);
+ui.dexButtonGame.addEventListener("click", openDex);   // 遊戲中(側欄)
+ui.dexFab.addEventListener("click", openDex);          // 遊戲中(畫面左上,手機也按得到)
+window.addEventListener("keydown", (e) => {            // 快捷鍵 B
+  if (e.key !== "b" && e.key !== "B") return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+  if (ui.dexModal.hidden) openDex();
 });
 ui.dexCloseButton.addEventListener("click", () => {
   audio.uiTap();
   ui.dexModal.hidden = true;
+  game.refreshFlock(); // 漫遊中改了伴行名單 → 場上羊與圈中羊立即換班
 });
 ui.dexExportButton.addEventListener("click", () => {
   audio.uiTap();

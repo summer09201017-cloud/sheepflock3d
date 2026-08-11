@@ -185,6 +185,19 @@ body::before {
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
 }
 
+/* 🐑 遊戲中隨時開羊圈(手機也按得到;暫停鈕在左上,這顆疊在它下面) */
+.dex-fab {
+  position: absolute;
+  top: calc(max(1rem, env(safe-area-inset-top)) + 3.6rem);
+  left: max(1rem, env(safe-area-inset-left));
+  z-index: 5;
+  min-width: 5.2rem;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  background: rgba(37, 66, 32, 0.82);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+}
+
 .message-ribbon {
   position: absolute;
   top: 16.6rem; /* 07-18:移到頂部面板下方,不擋血量/回合 */

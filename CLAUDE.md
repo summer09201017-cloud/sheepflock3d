@@ -6,6 +6,11 @@
 > 🧸 TSUM 鐵則(0811 使用者點名):牧人=makeShepherdTsum(chibi 大頭+tsumFaceZ,四肢用 createLimb
 > =與 makePerson 同介面,姿勢系統零改動);羊=makeGeneSheep(圓萌頭+水潤高光+腮紅)。
 > 🐑 神學鐵則:羊只支援不攻擊、永遠不會死;尋回=溫柔靠近(路15:5);跟隨=約10:3-4。
+> v2(0811 使用者三點回饋,agape250 機):①視角 4→5 檔,新增「側身跟隨」(V 序位 1,鏡頭掛牧人側面)
+> ②牧人加詩23:4 杖與竿——竿=左手長牧杖+頂端彎鉤(staff.rotation.x=0.98 抵銷護胸臂角保持直立,
+> 格擋時自然舉起),杖=右腰帶短棒;純裝飾,戰鬥仍赤手 ③羊圈看得到+選得到:漫遊時「已尋回未帶出門」
+> 的羊(≤10)待在東側石圈休息;遊戲內 #dexButtonGame(側欄)+#dexFab(左上懸浮)+B 鍵隨時開圖鑑;
+> 關圖鑑 → game.refreshFlock() 漫遊中立即換班(戰鬥中刻意不重建,防絨毛盾冷卻被洗);走近石圈一次性提示。
 > ⚠ 路15 語音 mp3 收割自 sheepquest/voice,manifest 對映的唸稿字串在 voicePhrases.FLOCK_SCRIPTURES,改一個字 hash 就對不上=靜默。
 
 以下為 davidbeasts3d 底座原文(戰鬥引擎照舊適用):

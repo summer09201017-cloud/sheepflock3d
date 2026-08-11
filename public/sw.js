@@ -1,6 +1,6 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
 // nf3(2026-07-30):🧸 獅/熊改成 tsum 圓萌造型(全艦隊政策「動物一律 tsum」第一個回頭改的舊站)
-const CACHE_NAME = "sheepflock3d-v1";   /* v1(0811):牧羊人與羊群首發(換皮自 davidbeasts3d nf3) */
+const CACHE_NAME = "sheepflock3d-v2";   /* v2(0811):側身跟隨視角+牧人杖與竿+羊圈看得到/選得到(圈中羊+遊戲內🐑鈕+B 鍵) */
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
