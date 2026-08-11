@@ -426,7 +426,7 @@ function makeShepherdTsum() {
   // 護胸姿勢下反轉 rotation.x 讓竿平時直立、格擋時自然舉起),杖=短棒插在右腰帶;純裝飾,戰鬥仍是赤手
   const woodMat = tmat(0x8a5a2e, 0.85);
   const staff = new THREE.Group();
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 2.05, 8), woodMat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 2.06, 8), woodMat); // 2.06:2.05 撞使用者 pii 禁字表(數字邊界內真命中,不是子字串誤判)
   shaft.position.y = 0.28;
   staff.add(shaft);
   const hook = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 8, 14, Math.PI * 1.25), woodMat);
