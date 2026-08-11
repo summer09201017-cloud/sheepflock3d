@@ -1,0 +1,109 @@
+============================================================
+牧羊人與羊群 3D(sheepflock3d)— 交接說明(讀我-HANDOFF.txt)
+更新:2026-08-11(agape250 機・Fable 5) · 給「另一台 PC / 下一手 AI」接手用
+============================================================
+
+★ 這是什麼
+  聖經主題 3D 遊戲:尋羊(路加福音十五章)+ 集羊(約翰福音十章三節「按著名叫自己的羊」)
+  + 護羊(撒母耳記上十七章,大衛打獅熊)。0811 換皮自 davidbeasts3d,TSUM 圓萌造型。
+  線上=https://hfpc-sheepflock3d.pages.dev(Cloudflare Pages,**手動部署**)
+  repo=summer09201017-cloud/sheepflock3d(本機 Desktop\AI\sheepflock3d)
+
+★★★ 現況(2026-08-11 收工):sw **v3**,線上已驗過收斂,**沒有進行中的工程** ★★★
+
+■ ✅ 本輪已完成(使用者三批回饋,全部上線)
+   v2 ─ ① 視角 4→5 檔,新增「側身跟隨」(看得到牧人側身,不再只有後腦)
+        ② 牧人加詩篇二十三篇四節的**杖與竿**(竿=左手長牧杖+彎鉤;杖=右腰短棒;純裝飾,戰鬥仍赤手)
+        ③ 羊圈看得到+選得到:沒帶出門的羊在東側石圈休息;遊戲中三個入口開圖鑑
+           (左上懸浮鈕 / 側欄鈕 / B 鍵);關掉圖鑑漫遊中立即換班
+   v3 ─ ① 圖鑑的羊變成**會動的 3D**(轉圈+踏步+小蹦跳);取名視窗也是 3D;圈中羊會低頭吃草
+        ② 羊發出**妹妹的叫聲**(曉雨預烤「咩~」四句,依體型調音高)
+        ③ **🗺 真實地圖漫遊**——首頁「牧場漫遊的地面」三選一(曠野 / 我家附近 GPS / 台北測試),
+           牧人與羊群走在真實街道上(CARTO/OSM 圖磚,與尋羊記同一份底圖)
+
+■ 📋 待使用者拍板(別自行動工)
+   🔴 **公開 repo 的 commit 訊息裡有一個禁字表的數字**(commit 4c8696e 的標題)。
+      當時為了說明「為什麼改這個長度」把數字寫進標題就 push 了;
+      原始碼與交接文件那兩處已清乾淨(本輪修掉),**但 commit 訊息改不掉**——
+      只能改寫歷史 + force push(對公開 repo 是破壞性操作,且另一台機若已 fetch 會分岔)。
+      選項:(a) 就這樣(那是個看不出意義的裸數字,單獨存在幾乎無法還原成什麼)
+            (b) 改寫那一個 commit 的訊息並 force push(我不會自己做,要你點頭)
+      → 教訓已寫進 skill silent-failure-patterns ⑥-9(掃描器全部只掃檔案,commit 訊息沒人掃)。
+
+■ 📋 待做(按 CP 值排;使用者尚未點名,動工前先問)
+   ⏱30分 ★★★ 地圖鮮豔濾鏡開關:投影到教室螢幕時 CARTO Voyager 偏淡。
+                尋羊記有這顆開關(它預設關,因為會讓路名變糊)——3D 版沒有路名要讀,
+                做法=圖磚載入後過 canvas `ctx.filter='saturate(1.4) brightness(1.04)'` 再轉貼圖。
+                ⚠ 跨網域 canvas 會不會被汙染要實測(CARTO 有送 CORS 標頭,理論上可以),
+                失敗要 try/catch 退回原貼圖。
+   ⏱2-3天 ★★★ B 案:尋羊記(sheepquest,GPS 版)寫同一份羊圈格式 `hfpc-sheepdex-v1`,
+                兩站的羊互通(現在只能靠匯出/匯入 JSON 手動搬)。3D 版這側已備妥
+                (`source:'3d'|'gps'` 欄位+ `worldToLatLon()` 可反推經緯度)。
+   ⏱1天 ★★   真實地圖上的「真實地標任務」:靠 worldToLatLon 判斷玩家走到哪,
+                在公園/學校等真實地點放特別的羊(要先想清楚資料來源,別打 API 打到爆)。
+   ⏱半天 ★★  天賦數值調校:四種羊的支援強度還沒被真人玩過,等使用者回饋再動。
+
+■ 🚫 刻意不做
+   · 真實地圖模式不放「圈中休息的羊」——石砌羊圈跟著曠野牧場一起收起來了,
+     只留羊在街上會變成「一群羊浮在馬路中間、旁邊沒有圈」。看羊改走 🐑 圖鑑鈕。
+   · 不做地圖的 3D 建物(OpenFreeMap 向量那套):圖磚已經夠讀,向量會多一份相依與流量,
+     而這站的重點是「羊跟著你走」不是地圖本身。
+
+■ 怎麼跑(本機)
+   npm install
+   npm run dev                    # http://localhost:5173
+   npm run build                  # → dist/
+   npx vite preview --port 4189   # 驗收都對著 preview 跑,不要對 dev
+
+   驗證(六關全綠+0 pageerror 才算過):
+   node scripts/verify-davidbeasts.mjs http://localhost:4189 scratch
+   本輪另寫的視覺驗證(scratch/,不進版控):
+     visual-check.mjs   側身視角/杖竿/圈中羊/換班
+     visual-check2.mjs  圖鑑 3D 會動(兩幀比對)/咩咩聲/真實地圖(demo)
+     visual-check3.mjs  真實地圖各視角/走遠不被 clamp/圖磚串流
+     live-probe.mjs     線上拿到的是哪一版 bundle、有沒有 pageerror
+
+   語音重烤(累加式,已有的檔會跳過):node scripts/gen-voice.mjs
+   ⚠ 唸稿改一個字 hash 就對不上 = 靜默沒聲音(BLEATS / FLOCK_SCRIPTURES 都是)。
+
+■ 部署(★ 這站是**手動部署**,push 不會自己上線)
+   npx vite build && npx wrangler pages deploy dist --project-name hfpc-sheepflock3d --branch main
+   驗:curl -s "https://hfpc-sheepflock3d.pages.dev/sw.js?bust=$(date +%s)" | grep -o 'sheepflock3d-v[0-9]*'
+   ⚠ 部署後 CDN 有幾十秒不一致期——剛部署完 curl 到舊 bundle 是正常的,等一下再驗一次
+     (0811 實測:sw.js 已是 v3、index.html 還是舊的,一分鐘後就一致了)。
+
+■ 本機地雷(踩過的,別再踩)
+   ① **改了東西一定要 bump `public/sw.js` 的 CACHE_NAME**,不然使用者的舊快取不會換。
+   ② zero-pii-guard 會擋部署:任何**純數字**只要撞到 ~/.pii-forbid.txt 就擋。
+      0811 踩到兩次——(a) three.js 內建色名表 `palegoldenrod:15657130` 被當成子字串命中
+      → 已修守門(數字型禁字加數字邊界,skills repo ce437a1);
+      (b) 我隨手寫的牧杖長度**剛好等於**表上一個數字 → 微調一個小數位就過了
+          (⚠ 那個數字本身不寫在這裡:交接文件會被打包帶走,寫進來等於把禁字抄出去)。
+      ⇒ 被擋時先看是「子字串誤判」還是「真的等於」,不要無腦加豁免。
+   ③ **fog 的 near/far 每幀被 `updateWeather` 覆寫**——在別處設 fog 等於沒設(0811 踩到)。
+      要改霧,改 updateWeather 裡那兩行。
+   ④ 真實地圖模式有一組「尺度假設」要一起改,漏一個就壞:
+      `this.bound`(活動範圍)、迷羊生成半徑、光柱高度、鏡頭焦點、fog、日夜鎖定。
+      詳見 CLAUDE.md v3 段的 (a)~(d)。
+   ⑤ Playwright 測 `page.click('#startMatchButton')` 之後**不要用固定 sleep 等地圖**,
+      用 `waitForFunction(() => !!window.__game.realMap)`——網路快慢差很多。
+
+■ 檔案在哪(一檔一責)
+   src/game.js      引擎本體(場景/戰鬥/漫遊/鏡頭/天氣);🐑 標記=羊群相關段落
+   src/flock.js     基因羊模型+羊圈圖鑑資料層+🐑 3D 動態頭像 createSheepShowcase
+   src/realmap.js   🗺 真實地圖圖磚地面(tile 數學/串流/回收/worldToLatLon)★本輪新增
+   src/main.js      UI 接線(圖鑑/取名/定位取得/地面三選一/HUD)
+   src/voice.js     人聲 runtime(speakLine 旁白經文 + playBleat 羊叫獨立音池)
+   src/voicePhrases.js  唸稿正本(PHRASES/SCRIPTURES/FLOCK_SCRIPTURES/BLEATS)
+   public/sw.js     PWA 快取(改東西就 bump CACHE_NAME)
+   public/voice/    預烤 mp3 + manifest.json
+
+■ 神學鐵則(不可自行放寬)
+   · 羊只支援、不攻擊、**永遠不會死**(牠們是被保護的,不是戰力)
+   · 尋回=溫柔靠近(路15:5「歡歡喜喜地扛在肩上」),不是抓捕
+   · 得勝歸於耶和華(撒上17:37),不是牧人的肌肉
+   · 經文一律和合本、cuv 逐字查驗;野獸被制伏=側躺,不流血
+
+■ 一鍵裝齊 skill(換機第一句)
+   /take-over   ← 會自己 pull skills repo、跑 install.bat、蓋 sites.json、跑衛生巡檢、對賬開工
+============================================================
