@@ -30,5 +30,5 @@ npm run dev      # http://localhost:5173
 npx vite build   # → dist/
 ```
 
-★ 尚未上架:公開 repo/站名等使用者逐字點名(上架鐵則)。
+★ 已上架(0811 使用者點名):**https://hfpc-sheepflock3d.pages.dev**(CF Pages);repo summer09201017-cloud/sheepflock3d。
 經文全部 cuv 逐字查驗;路15 語音 mp3 收割自 sheepquest/voice(同烤稿,勿改字)。

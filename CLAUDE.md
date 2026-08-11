@@ -1,6 +1,6 @@
 # CLAUDE.md — sheepflock3d(牧羊人與羊群 3D:尋羊+集羊+護羊)
 
-> 2026-08-11 換皮自 davidbeasts3d(DEYI 機)。★尚未上架:站名/repo 名等使用者逐字點名。
+> 2026-08-11 換皮自 davidbeasts3d(DEYI 機)。★已上架:https://hfpc-sheepflock3d.pages.dev(0811 點名);部署=npx vite build && npx wrangler pages deploy dist --project-name hfpc-sheepflock3d --branch main。
 > 🐑 新增系統全在 **src/flock.js**(基因羊/圖鑑/跟隨/天賦)+ game.js 標 🐑 的段落 + main.js 圖鑑取名 UI。
 > 羊圈圖鑑=跨站格式 `hfpc-sheepdex-v1`(B 案接口,尋羊記 GPS 版日後對接;格式見 flock.js 檔頭)。
 > 🧸 TSUM 鐵則(0811 使用者點名):牧人=makeShepherdTsum(chibi 大頭+tsumFaceZ,四肢用 createLimb
