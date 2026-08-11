@@ -7,6 +7,12 @@ const defaultSettings = {
   beastId: "lion1",
   audioEnabled: true,
   realMap: "off", // 🗺 牧場漫遊的地面:off=曠野牧場 / gps=真實地圖 / demo=台北測試地圖
+  /* 🗺 真實地標任務的「線上補查」:走出預烤地標包的範圍時,查一次這一帶有哪些公園/學校。
+     ★ 預設開啟,但**關得掉**(關了=只用內建的台北測試地標包)。
+       關掉的理由是隱私:補查會把「你所在的 1 公里方格中心」送去 Overpass 問一次
+       (不是精確座標、同一格只問一次、結果只存在這支手機)——但那畢竟是一次連外,
+       所以照尋羊記的慣例給一個明確的開關,而不是替使用者決定。 */
+  landmarksOnline: true,
 };
 
 function parseValue(value, fallback) {
@@ -24,11 +30,19 @@ export function loadSettings() {
   };
 }
 
+/* ⚠ 0812 修的真 bug:原本是 `{...defaultSettings, ...settings}` —— 只補預設值、**不讀既有存檔**。
+   於是任何「只存一部分」的呼叫都會把沒帶到的鍵**打回預設**:
+   game.js 出發時會 `saveSettings({difficulty, modeId, beastId})`,
+   ⇒ 每按一次「出發」,`realMap`(牧場漫遊的地面)就被洗回 "off"
+   ⇒ 使用者選了「🗺 我家附近的真實地圖」,重新載入頁面就變回曠野牧場。
+   而 main.js:135 那段註解寫的正是「地面選擇要記得(不然每次都要重選)」——
+   ★ 存了、也讀了、看起來完全正常,只是**被另一個呼叫者靜靜蓋掉**(localstorage 無聲失敗的一型)。
+   ⇒ 一律先讀既有的再蓋上這次要改的,讓「只存一部分」變成安全操作(每個呼叫端本來就這樣假設)。 */
 export function saveSettings(settings) {
   localStorage.setItem(
     SETTINGS_KEY,
     JSON.stringify({
-      ...defaultSettings,
+      ...loadSettings(),
       ...settings,
     }),
   );

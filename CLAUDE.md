@@ -36,6 +36,46 @@
 >    ★ 離線鐵則:拿不到定位或圖磚下載失敗 ⇒ 退回曠野牧場照玩,絕不卡住(教會沒網路也要能上課)。
 >    定位用 `watchPosition`(getCurrentPosition 一次逾時就死)+ LINE/FB WebView 明講怎麼換瀏覽器。
 
+> v4(2026-08-12 使用者點名兩件,HFP 機):
+> ① **🐑 兩站的羊互通(B 案)**——對象=尋羊記(sheepquest,GPS 抓寶版)。
+>    ★★ **兩站在不同 origin**(pages.dev vs workers.dev)⇒ 同一個 localStorage 鍵**不會自動同步**。
+>       統一格式買到的只有「匯出的文字互相吃得下」;真正的搬運要另外給 ⇒ 做了兩層:
+>       (a) 同格式匯出/匯入(零基礎設施、離線可用、保底)
+>       (b) ☁ **6 碼短碼**走 `hfpc-sheepdex` Worker + 一顆 KV(30 天 TTL 自動消失)。
+>    格式實作搬出 flock.js → **`src/sheepdex.js`**(=skill `sheepdex-crossite` 的垂直搬運複本,
+>    **勿就地改**;與 sheepquest/hfpc-sheepdex 三份逐位元相同,可用 Get-FileHash 對賬)。
+>    flock.js 只留 three.js 專屬的部分,對外名字全數 re-export ⇒ main.js/game.js 的 import 一行沒改。
+>    ⚠ **UMD 掛載不可以寫成 if/else**(0812 實錘):Vite/Rollup 會把裸識別字 `module` 當外部全域
+>      並且**走 CJS 那支** ⇒ 傳統 UMD 的 `else root.X=…` 永遠不執行 ⇒ 取全域拿到 undefined ⇒
+>      解構當場拋 TypeError ⇒ **整包 JS 全死**,而選單是靜態 HTML 所以「頁面看起來正常」、
+>      build 也是綠的、HTTP 200。抓到它的只有真的開瀏覽器看 console。⇒ 先無條件掛全域,再給 module.exports。
+>    確定性 genes(種子=entry.id)⇒ 同一隻羊在兩站長相**逐欄相同**;確定性 GPS id ⇒ 重複匯入不生第二隻。
+>    圖鑑徽章:🛰️尋羊記 / ✨金毛 / ⚔️獸口救回 / 🗺地標。
+> ② **🗺 真實地標任務**(`src/landmarks.js` + `src/landmarks-taipei.json`):
+>    真實地圖漫遊時走進真的公園/學校/球場 ⇒ **那座地標上**有一隻特別的羊(天賦鎖詩歌羊、
+>    光柱改淡青色、訊息直接寫出地標名字=不只靠顏色分辨),每座地標 24 小時一隻。
+>    位置用 `realMap.latLonToWorld()`(本輪新增的 `worldToLatLon` 反函數)算,誤差<2m。
+>    資料兩源:預烤包(台北車站 3km,257 個公開地標,26KB,線上零 API)+ 走出範圍才線上補查。
+>    ★★ 「別打 API 打到爆」五道閘:①只在跨進新格(≈1.1km)時查 ②間隔 ≥20 秒且同時只一個
+>       ③每天 ≤25 次 ④查到快取 30 天 / 真的沒有 1 天 / **沒連上只鎖 10 分鐘** ⑤快取上限 60 格。
+>    ⚠ abort 超時 **30 秒**是量出來的:實測 Overpass 要 9~12 秒,第一版寫 12 秒會**砍掉成功的請求**,
+>      而且失敗是靜默的 ⇒ 看起來「永遠找不到地標」。
+>
+> ★★ 隱私鐵則(0812 立;兩條既有規則的延伸,別「順手」破壞)★★
+>   · 圖鑑**不存經緯度、不存地名**,只存地標的**名字**當紀念。
+>     由來:尋羊記 index.html 原註解「地名只顯示在畫面上,不上傳、**不寫進羊圈紀錄**」,
+>     而圖鑑現在**可以用短碼上雲** ⇒ 寫進去就等於把行蹤送出這支手機。
+>   · `hfpc-sheepdex` Worker **主動刪掉** place/lat/lon(不信任前端,defense in depth)。
+>   · 預烤地標包**只放公開知名地標**,絕不烤使用者家附近 ——
+>     尋羊記 index.html:163「地名是執行時查來的,**不寫死在原始碼裡**,公開 repo 不會帶著任何人的所在地」。
+>     自家周邊一律走線上補查,結果只存這支手機的 localStorage。
+>   · 線上補查送出去的是**格中心**(≈1km 粗),不是手機的精確座標;而且首頁給得到開關整個關掉。
+>
+> 🐛 順修一個既有真 bug:`storage.js` 的 `saveSettings` 原本是 `{...defaultSettings, ...settings}`
+>   ⇒ 只存一部分的呼叫會把沒帶到的鍵**打回預設**。game.js 出發時 `saveSettings({difficulty,modeId,beastId})`
+>   ⇒ 每按一次「出發」,`realMap`(牧場漫遊的地面)就被洗回 "off" ⇒ 使用者選了真實地圖、重載就變回曠野
+>   (而 main.js 那段註解寫的正是「地面選擇要記得」)。改成先讀既有存檔再蓋。
+
 以下為 davidbeasts3d 底座原文(戰鬥引擎照舊適用):
 
 # CLAUDE.md — davidbeasts3d(3D 大衛打獅熊・護羊之戰,撒母耳記上十七章)
@@ -92,16 +132,29 @@
 PHRASES 15 句(雲哲)+SCRIPTURES 2 句(曉臻,撒上17:34/17:37 逐字)=17 mp3 已烤。
 獅/熊各有預告與被打句(main.js 依 `event.beast` 選);`beast-down` 剩獸>0 唸「還有野獸」。
 
-## 驗證
+## 驗證(兩支,都要跑)
 
-`npm run build && npx vite preview --port 4189`;
-`node scripts/verify-davidbeasts.mjs http://localhost:4189 scratch`——六關全綠+0 pageerror:
-①lion1 kids bot 勝 ②bear3 三熊 KO 鏈 ③both hard 站樁玩家該輸 ④金光穿透雙獸都掉血
-⑤death 黑化 16110d/14100c+normal 回 c9863a ⑥practice 8 秒不掉血。
+先 `npm run build && npx vite preview --port 4189`,然後:
+
+1. `npm run verify:beasts` —— 六關全綠+0 pageerror:①lion1 kids bot 勝 ②bear3 三熊 KO 鏈
+   ③both hard 站樁玩家該輸 ④金光穿透雙獸都掉血 ⑤death 黑化 16110d/14100c+normal 回 c9863a
+   ⑥practice 8 秒不掉血。
+2. `npm run verify:landmarks` —— 🗺 地標任務 **33 項**(0812 新增):座標來回換算、走進地標生羊、
+   羊放在地標真正的位置(誤差<2m)、24 小時不連噴、圖鑑只記名字不記經緯度、線上補查五道閘、
+   Overpass 解析確定性單測、關掉後零請求。
+
+★ 這支驗收的兩條血淚判準(照抄,別放寬):
+  · **一定要放大 `g.bound` 再設 pos**:漫遊 clamp 是 400m,直接瞬移會被拉回 (400,400),
+    那裡還在預烤範圍內 ⇒ 看起來像「補查壞了」。
+  · **Overpass 是志工服務、實測會回 504**:它的死活不算我們的紅燈(console error 過濾第三方雜訊),
+    「解析對不對」交給固定樣本的單測,不要綁在「它今天有沒有空」上。
 
 ## dev hook
 
 `window.__davidbeasts3d`(+`__warrior3d` 引擎舊名雙掛)+`window.__game`(/smoke3d 通用)。
+`window.__landmarks(lat,lon)` —— 🗺 地標補查探針:回 `lastReason`(不發請求的七個理由全是安靜的,
+沒這支就分不出「節流生效」與「壞了」)、快取格數、每日計數、距預烤中心多遠、covered。
+`window.__parseOverpass(json)` —— 解析器,給確定性單測用。
 
 ## 部署與同步(上架後,主線負責)
 

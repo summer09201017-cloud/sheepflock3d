@@ -235,6 +235,17 @@
               </select>
               <p class="install-hint" id="realMapHint">選真實地圖時,牧人和羊群會走在你所在位置的街道上——羊散在附近幾百公尺,像尋羊記那樣把牠們找回來。</p>
 
+              <!-- 🗺 真實地標任務(0812 使用者點名):走到真的公園/學校就有一隻特別的羊。
+                   ★ 開關的理由是隱私,不是效能:補查會把「你所在的 1 公里方格中心」送去問一次
+                     這一帶有哪些公園(不是精確座標、同一格只問一次、結果只留在這支手機)。
+                     台北測試地圖用的是內建地標包,完全不連外。 -->
+              <label class="field-label" for="landmarkSelect">真實地標的羊</label>
+              <select id="landmarkSelect">
+                <option value="on">🗺 開啟(走到公園/學校有特別的羊)</option>
+                <option value="off">🔒 只用內建地標(完全不連外查地標)</option>
+              </select>
+              <p class="install-hint">開啟時,走進真的公園、學校或球場,那裡會有一隻<b>唱詩的羊</b>等你(淡青色光柱;每個地方一天一隻)。羊圈裡會記著牠是在哪裡遇見的——<b>只記地方的名字,不記經緯度,也不會上傳</b>。</p>
+
               <label class="field-label" for="audioSelect">音效與播報</label>
               <select id="audioSelect">
                 <option value="on">開啟</option>
@@ -268,11 +279,16 @@
         <div class="sheep-modal-head">
           <strong>🐑 我的羊圈</strong>
           <span id="dexCount" class="dex-count"></span>
+          <button id="dexUpButton" type="button">☁ 產生短碼</button>
+          <button id="dexDownButton" type="button">📥 短碼收羊</button>
           <button id="dexExportButton" type="button">匯出</button>
           <button id="dexImportButton" type="button">匯入</button>
           <button id="dexCloseButton" type="button" class="primary">關閉</button>
         </div>
         <p class="dex-hint">🚶 伴行=漫遊時跟著你(最多 5)・⚔️ 出戰=打野獸時幫你(最多 3)。「他按著名叫自己的羊,把羊領出來。」(約翰福音十章三節)</p>
+        <!-- 🛰️ 跨站互通(0812 B 案):尋羊記(GPS 抓寶版)在**不同網址**,兩邊的羊圈是各自存的。
+             短碼=最快的搬法;沒網路就用「匯出/匯入」貼文字,一樣通。 -->
+        <p class="dex-hint">🛰️ 走路抓的羊在「尋羊記」那站:打開它的羊圈 →「☁ 產生搬運短碼」→ 回來這裡按「📥 短碼收羊」。牠們一樣可以伴行與出戰。</p>
         <div class="dex-grid" id="dexGrid"></div>
         <textarea id="dexIoBox" class="dex-io" hidden placeholder="貼上另一台裝置匯出的羊圈 JSON,再按一次「匯入」"></textarea>
       </div>

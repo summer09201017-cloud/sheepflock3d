@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { InputManager } from "./input.js";
 import { loadSettings, saveSettings, loadSavedGame, saveGameState } from "./storage.js";
 import { makeGeneSheep, randomGenes, loadDex } from "./flock.js";
+import { findLandmarkAt, topUpLandmarks, landmarkClaimed, claimLandmark, landmarkMeta } from "./landmarks.js";
 
 // —— 牧羊人與羊群(sheepflock3d)——2026-08-11 換皮自 davidbeasts3d(3D 大衛打獅熊・護羊之戰)。
 // 新增:🐑 羊群系統(src/flock.js)——牧場漫遊尋回迷羊(路15:4-6)、每隻羊基因長相不同、
@@ -1462,6 +1463,7 @@ export class WarriorGame {
         this.pushHud();
       }
     }
+    this._updateLandmarks(dt);          // 🗺 走進真的公園/學校 → 那裡有一隻特別的羊
     if (!this.lost) {
       this.lostTimer -= dt;
       if (this.lostTimer <= 0) this._spawnLostSheep();
@@ -1483,37 +1485,89 @@ export class WarriorGame {
     if (d < 1.7) {
       // 尋回!交給 UI 取名(holdRoam 由 UI 設回)
       this.holdRoam = true;
-      this.emitEvent("sheep-found", { genes: L.genes });
+      // 🗺 地標羊要把地標名帶給 UI,取名後才寫得進圖鑑(「恩典・🗺大安公園」)
+      this.emitEvent("sheep-found", { genes: L.genes, landmark: L.landmark || null });
     }
   }
 
-  _spawnLostSheep() {
+  /* ---------- 🗺 真實地標任務(0812)----------
+     走進真的公園/學校/球場,那座地標上就有一隻**特別的羊**在等你(每座地標 24 小時一隻)。
+     ★ 只在真實地圖模式有效:曠野牧場沒有「真的地方」可以走進去。
+     ★ 判位節流 1.2 秒一次:worldToLatLon + 距離比對很便宜,但沒必要每幀跑 60 次。
+     ★ 線上補查是 fire-and-forget:它自己有五道閘(見 landmarks.js),而且**永遠不吐錯**——
+       地標羊是加分功能,查不到就當這一帶沒有地標,遊戲照樣完整。 */
+  _updateLandmarks(dt) {
+    if (!this.realMap || !this.realMap.latLonToWorld) return;
+    this._lmT = (this._lmT || 0) - dt;
+    if (this._lmT > 0) return;
+    this._lmT = 1.2;
+
+    const here = this.realMap.worldToLatLon(this.my.pos.x, this.my.pos.z);
+    if (!Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return;
+
+    // 走出預烤範圍才會真的發請求;補到新資料就立刻再判一次位
+    // 🔒 可以整個關掉線上補查(關了=只用預烤包)。★ 讀 storage 而不是快取在物件上:
+    //    使用者在設定裡按下去要**當場生效**,不必重開遊戲。loadSettings 只讀一顆 localStorage,
+    //    而這裡 1.2 秒才跑一次,完全不是熱路徑。
+    const online = loadSettings().landmarksOnline !== false;
+    topUpLandmarks(here.lat, here.lon, { enabled: online }).catch(() => {});
+
+    if (this.lost || this.holdRoam) return;              // 已經有一隻羊在等他找了,不要同時兩隻
+    const lm = findLandmarkAt(here.lat, here.lon);
+    if (!lm || landmarkClaimed(lm)) return;
+    claimLandmark(lm);                                   // 先記帳:免得同一座公園連噴好幾隻
+    this._spawnLostSheep(lm);
+  }
+
+  _spawnLostSheep(landmark = null) {
     const genes = randomGenes();
+    // 🗺 地標羊=看得出來不一樣:大一點、而且天賦固定成「詩歌羊」(在那個地方唱詩讚美)
+    if (landmark) { genes.size = Math.min(1.28, genes.size * 1.12); genes.gift = "song"; }
     const person = makeGeneSheep(genes);
     // 出現在牧人一段距離外的環帶上(看得到方向、要走一小段)
     // 🗺 真實地圖:散到 35~110 公尺外的街區——沿用曠野的 9~13 公尺會變成「一出門就踩到羊」,
     //    整個「走出去找」的重點就沒了(這是換地圖才會露出來的體驗 bug,不是數值偏好)。
-    const a = Math.random() * Math.PI * 2;
-    const r = this.realMap ? 35 + Math.random() * 75 : 9 + Math.random() * 4.5;
     const sb = (this.bound || ARENA_HALF) - 1; // 真實地圖模式=迷羊散在幾百公尺的街區裡(同 movePos 的 clamp 例外)
-    const x = clamp(this.my.pos.x + Math.cos(a) * r, -sb, sb);
-    const z = clamp(this.my.pos.z + Math.sin(a) * r, -sb, sb);
+    let x, z, r;
+    if (landmark) {
+      // 🗺 放在**那座地標真正的位置**上(不是「在你附近隨便找個點」)——孩子走過去看到的就是那座公園
+      const w = this.realMap.latLonToWorld(landmark.lat, landmark.lon);
+      x = clamp(w.x, -sb, sb);
+      z = clamp(w.z, -sb, sb);
+      r = Math.hypot(x - this.my.pos.x, z - this.my.pos.z);
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      r = this.realMap ? 35 + Math.random() * 75 : 9 + Math.random() * 4.5;
+      x = clamp(this.my.pos.x + Math.cos(a) * r, -sb, sb);
+      z = clamp(this.my.pos.z + Math.sin(a) * r, -sb, sb);
+    }
     person.group.position.set(x, 0, z);
     // 柔光柱=遠遠就看得到牠在哪(兒童友善指引)
     // 🗺 真實地圖上羊在上百公尺外,光柱要又高又粗才看得到(6 公尺的柱子在 100 公尺外=一個小點)
     const bh = this.realMap ? 34 : 6;
+    // 🗺 地標羊的光柱是**淡青色**(一般迷羊是金色)⇒ 一眼看得出「那邊那隻不一樣」。
+    //    ★ 不能只靠顏色分辨(紅綠色弱看不出來):所以訊息也直接寫出地標名字。
     const beacon = new THREE.Mesh(
       new THREE.CylinderGeometry(this.realMap ? 1.5 : 0.5, this.realMap ? 2.1 : 0.7, bh, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xffe89a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: landmark ? 0x9fe8dd : 0xffe89a,
+        transparent: true, opacity: landmark ? 0.32 : 0.25, side: THREE.DoubleSide, depthWrite: false,
+      }),
     );
     beacon.position.set(0, bh / 2, 0);
     person.group.add(beacon);
     this.scene.add(person.group);
-    this.lost = { genes, group: person.group, person, pos: new THREE.Vector3(x, 0, z), bleatT: 0.5, beacon };
-    this.message = this.realMap
-      ? `聽——有迷失的羊在咩咩叫!牠在 ${Math.round(r)} 公尺外,循著金色光柱走過去(Shift 快跑)。`
-      : "聽——有迷失的羊在咩咩叫!循著光柱走過去。";
-    this.emitEvent("lost-appear", {});
+    this.lost = { genes, group: person.group, person, pos: new THREE.Vector3(x, 0, z), bleatT: 0.5, beacon, landmark };
+    if (landmark) {
+      const m = landmarkMeta(landmark.k);
+      this.message = `${m.icon} 你走到「${landmark.n}」了!這座${m.label}裡有一隻特別的羊在唱詩——`
+        + `牠在 ${Math.round(r)} 公尺外,循著淡青色的光柱走過去。`;
+    } else {
+      this.message = this.realMap
+        ? `聽——有迷失的羊在咩咩叫!牠在 ${Math.round(r)} 公尺外,循著金色光柱走過去(Shift 快跑)。`
+        : "聽——有迷失的羊在咩咩叫!循著光柱走過去。";
+    }
+    this.emitEvent("lost-appear", { landmark });
     this.pushHud();
   }
 

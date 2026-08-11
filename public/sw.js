@@ -1,6 +1,11 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
 // nf3(2026-07-30):🧸 獅/熊改成 tsum 圓萌造型(全艦隊政策「動物一律 tsum」第一個回頭改的舊站)
-const CACHE_NAME = "sheepflock3d-v3";   /* v3(0811):圖鑑 3D 會動的羊+妹妹的咩咩聲(曉雨預烤)+🗺 真實地圖漫遊(CARTO/OSM 圖磚,像尋羊記) */
+// v4(2026-08-12):🐑 羊圈和尋羊記(GPS 版)**互通**(B 案)——共用跨站格式 hfpc-sheepdex-v1
+//                 (src/sheepdex.js=skill sheepdex-crossite 垂直搬運複本)+ ☁ 6 碼短碼搬運
+//                 + 🗺 **真實地標任務**(走進真的公園/學校 → 那裡有一隻唱詩的羊;預烤台北地標包
+//                 + 走出範圍才線上補查、結果只存在本機)。順修:saveSettings 會把沒帶到的鍵打回預設
+//                 ⇒「牧場漫遊的地面」每次出發都被洗回曠野。
+const CACHE_NAME = "sheepflock3d-v4";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

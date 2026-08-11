@@ -4,6 +4,7 @@ import { AudioManager } from "./audio.js";
 import { speakLine, setVoiceEnabled, playBleat } from "./voice.js";
 import { PHRASES, SCRIPTURES, FLOCK_SCRIPTURES } from "./voicePhrases.js";
 import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
+import { landmarksDebug, normalizeOverpass } from "./landmarks.js";
 import { GIFTS, NAME_POOL, loadDex, saveDex, addSheepToDex, drawSheepPortrait, exportDexText, importDexText, SQUAD_MAX, FOLLOW_MAX, createSheepShowcase } from "./flock.js";
 
 const ui = {
@@ -58,6 +59,7 @@ const ui = {
   dexButtonGame: document.querySelector("#dexButtonGame"),
   dexFab: document.querySelector("#dexFab"),
   realMapSelect: document.querySelector("#realMapSelect"),
+  landmarkSelect: document.querySelector("#landmarkSelect"),
   mapCredit: document.querySelector("#mapCredit"),
   dexModal: document.querySelector("#dexModal"),
   dexGrid: document.querySelector("#dexGrid"),
@@ -65,6 +67,8 @@ const ui = {
   dexCloseButton: document.querySelector("#dexCloseButton"),
   dexExportButton: document.querySelector("#dexExportButton"),
   dexImportButton: document.querySelector("#dexImportButton"),
+  dexUpButton: document.querySelector("#dexUpButton"),
+  dexDownButton: document.querySelector("#dexDownButton"),
   dexIoBox: document.querySelector("#dexIoBox"),
   nameModal: document.querySelector("#nameModal"),
   namePortrait: document.querySelector("#namePortrait"),
@@ -84,6 +88,9 @@ const game = new WarriorGame({
 });
 window.__sheepflock3d = game; window.__davidbeasts3d = game; window.__warrior3d = game; // dev hook(新名+引擎舊名雙掛)
 window.__game = game; // /smoke3d 通用鉤子
+// 🗺 地標補查的診斷探針:補查「不發請求」有七個理由且全是安靜的,沒這支就分不出「節流生效」與「壞了」
+window.__landmarks = landmarksDebug;
+window.__parseOverpass = normalizeOverpass;   // 驗收用:解析邏輯要能不靠 Overpass 死活就測
 
 let selectedModeId = game.modeId;
 let selectedDifficulty = game.difficulty;
@@ -97,6 +104,9 @@ function persistSettings() {
     beastId: selectedBeastId,
     audioEnabled,
     realMap: ui.realMapSelect ? ui.realMapSelect.value : "off",
+    // 🗺 地標補查開關。★ 沒有這個元素時要維持 true(預設開啟),不能寫成 `=== "on"` ——
+    //    那樣在元素還沒渲染出來時會被存成 false,使用者從沒關過卻被關掉。
+    landmarksOnline: ui.landmarkSelect ? ui.landmarkSelect.value !== "off" : true,
   });
 }
 
@@ -134,6 +144,15 @@ function syncMenuControls() {
 if (ui.realMapSelect) {
   ui.realMapSelect.value = settings.realMap || "off";
   ui.realMapSelect.addEventListener("change", () => {
+    unlockAudio();
+    audio.uiTap();
+    persistSettings();
+  });
+}
+// 🗺 地標補查開關(同上,要記得住)。預設開啟 ⇒ 舊存檔沒有這個鍵時不可以讀成關閉
+if (ui.landmarkSelect) {
+  ui.landmarkSelect.value = settings.landmarksOnline === false ? "off" : "on";
+  ui.landmarkSelect.addEventListener("change", () => {
     unlockAudio();
     audio.uiTap();
     persistSettings();
@@ -214,7 +233,7 @@ function handleGameEvent(event) {
       audio.scoreSting();
       audio.crowdCheer(0.8);
       audio.vibrate([40, 30, 60]);
-      openNameModal(event.genes);
+      openNameModal(event.genes, event.landmark);
       break;
     }
     case "sheep-bell": {
@@ -359,11 +378,13 @@ game.onEvent = handleGameEvent;
 
 // ---------- 🐑 尋回取名(路15:5;約10:3 按著名叫自己的羊) ----------
 let pendingGenes = null;
+let pendingLandmark = null;   // 🗺 這隻是在哪個真實地標撿到的(地標羊才有;寫進圖鑑當紀念)
 let pickedName = "";
 const nameShowcase = createSheepShowcase(); // 取名視窗專用(與圖鑑分開,免得 clear 互相清掉)
 
-function openNameModal(genes) {
+function openNameModal(genes, landmark = null) {
   pendingGenes = genes;
+  pendingLandmark = landmark;
   pickedName = "";
   ui.nameInput.value = "";
   // 初次見面也給 3D 會動的羊(見面禮比 2D 頭像有感);舊裝置退回 2D
@@ -400,14 +421,20 @@ ui.nameConfirmButton.addEventListener("click", () => {
   audio.uiTap();
   const name = (ui.nameInput.value.trim() || pickedName || NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)]).slice(0, 8);
   const dex = loadDex();
-  const rec = addSheepToDex(dex, name, pendingGenes);
+  // 🗺 地標名只存**羊的名字旁邊當紀念**,不存經緯度(位置資料不落地——同尋羊記的隱私鐵則)
+  const lm = pendingLandmark;
+  const rec = addSheepToDex(dex, name, pendingGenes, lm ? { landmark: lm.n } : {});
   pendingGenes = null;
+  pendingLandmark = null;
   ui.nameModal.hidden = true;
   nameShowcase.clear(); // 收工:停掉那張卡的 rAF
   game.adoptLostSheep(rec);
   const total = dex.sheep.length;
   window.psPing?.("sheepflock3d-found");
-  if (total > 0 && total % 10 === 0) {
+  if (lm) window.psPing?.("sheepflock3d-landmark");   // 🗺 地標羊單獨打點(才知道這功能有沒有人用到)
+  if (lm) {
+    pushCommentary(`${name} 是在「${lm.n}」遇見的——那個地方以後你會記得牠!`, "hot", FLOCK_SCRIPTURES.found);
+  } else if (total > 0 && total % 10 === 0) {
     pushCommentary(`第 ${total} 隻!${name} 加入了羊群——你們和我一同歡喜吧!`, "hot", FLOCK_SCRIPTURES.party);
   } else {
     pushCommentary(`${name} 加入了羊群!(羊圈裡有 ${total} 隻羊)`, "hot", FLOCK_SCRIPTURES.found);
@@ -444,7 +471,13 @@ function renderDex() {
     const gift = GIFTS[s.genes.gift] || GIFTS.bell;
     const gl = document.createElement("div");
     gl.className = "dex-gift";
-    gl.textContent = `${gift.icon} ${gift.label}${s.source === "gps" ? "・🛰️尋羊記" : ""}`;
+    // 徽章:天賦 + 來源 + ✨金毛 + ⚔️從獸口救回 + 🗺 真實地標(選填欄位,沒有就不顯示)
+    const marks = [`${gift.icon} ${gift.label}`];
+    if (s.source === "gps") marks.push("🛰️尋羊記");
+    if (s.gold) marks.push("✨金毛");
+    if (s.rescued) marks.push(`⚔️${s.rescued}口中救回`);
+    if (s.landmark) marks.push(`🗺${s.landmark}`);
+    gl.textContent = marks.join("・");
     card.appendChild(gl);
     const row = document.createElement("div");
     row.className = "dex-toggles";
@@ -514,8 +547,65 @@ ui.dexImportButton.addEventListener("click", () => {
   }
   const dex = loadDex();
   const added = importDexText(dex, ui.dexIoBox.value);
-  ui.dexCount.textContent = added < 0 ? "看不懂這段 JSON——請確認是羊圈匯出的內容。" : `匯入完成:新增 ${added} 隻羊。`;
-  if (added > 0) renderDex();
+  // ★ 三種結果要講成三句話:看不懂 / 都已經有了 / 真的新增(全講「完成」就是無聲失敗)
+  dexSay(added < 0
+    ? "看不懂這段 JSON——請確認是羊圈匯出的內容(沒有動到你原有的羊)。"
+    : added === 0 ? "這些羊你羊圈裡都已經有了,沒有新增(不是失敗)。" : `匯入完成:新增 ${added} 隻羊。`,
+  added > 0);
+});
+
+/* 圖鑑的訊息列。★★ 一定要走這支,不要直接寫 ui.dexCount:
+   `renderDex()` 的第一件事就是把 dexCount 覆寫成「N 隻・🚶伴行…」
+   ⇒ 先寫訊息再 renderDex,使用者**永遠看不到那句話**(訊息閃一下就被蓋掉)。
+   0812 線上驗收時 waitForFunction 逾時才抓到;既有的「匯入」按鈕從一開始就是這個病。
+   ⇒ 先重畫,再寫字。 */
+function dexSay(text, alsoRerender = false) {
+  if (alsoRerender) renderDex();
+  ui.dexCount.textContent = text;
+}
+
+// ---------- ☁ 短碼搬羊(跨站;0812 B 案第二層)----------
+// 為什麼要:尋羊記在**不同 origin**,localStorage 不共用。孩子在外面用手機抓羊、回教室用電腦玩 3D,
+// 「複製一大段 JSON 再貼過去」在手機上很難做對 ⇒ 打 6 個字就好。
+// ★ 失敗一律指路回「匯出/匯入」那條離線路徑,不可以只印「失敗」讓人卡住。
+const DEX_MOVE_API = "https://hfpc-sheepdex.summer09201017.workers.dev";
+ui.dexUpButton.addEventListener("click", async () => {
+  audio.uiTap();
+  const dex = loadDex();
+  if (!dex.sheep.length) { dexSay("羊圈是空的——先去牧場找一隻羊回來。"); return; }
+  dexSay("☁ 正在送出…");
+  try {
+    const r = await fetch(`${DEX_MOVE_API}/put`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: exportDexText(dex),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.code) throw new Error(j.error || `HTTP ${r.status}`);
+    ui.dexIoBox.hidden = false;
+    ui.dexIoBox.value = j.code;
+    dexSay(`☁ 短碼是 ${j.code} —— 在另一台裝置按「📥 短碼收羊」打進去(30 天內有效)。`
+      + "(短碼不會帶地點資訊;要連地標名字一起搬就用「匯出/匯入」貼文字。)");
+  } catch {
+    dexSay("☁ 送不出去(沒網路或被擋)。改用「匯出」複製文字貼過去,一樣搬得動。");
+  }
+});
+ui.dexDownButton.addEventListener("click", async () => {
+  audio.uiTap();
+  const code = (prompt("打入另一台裝置給你的 6 碼搬運碼:") || "").trim().toLowerCase();
+  if (!code) return;
+  dexSay("📥 正在收…");
+  try {
+    const r = await fetch(`${DEX_MOVE_API}/get?code=${encodeURIComponent(code)}`);
+    if (r.status === 404) { dexSay("📥 查不到這個短碼(可能打錯,或已經過了 30 天)。"); return; }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const dex = loadDex();
+    const added = importDexText(dex, await r.text());
+    dexSay(added < 0
+      ? "⚠ 收到的內容看不懂——沒有動到你原有的羊。"
+      : added === 0 ? "那邊的羊你都已經有了,沒有新增(不是失敗)。" : `🐑 收到 ${added} 隻新的羊!`,
+    added > 0);
+  } catch {
+    dexSay("📥 收不到(沒網路或被擋)。改用「匯入」貼文字也可以。");
+  }
 });
 
 game.onHudUpdate = (state) => {

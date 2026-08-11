@@ -40,7 +40,7 @@ function tileUrl(x, y, z) {
 
 /* 建一塊會跟著你延伸的真實地圖地面。
    scene=three 場景;lat/lon=開場站的位置;radius=以你為中心先鋪幾圈磚(2 ⇒ 5×5)。
-   回傳 { ok, group, mpp, tileMeters, update(x,z), worldToLatLon(x,z), dispose() }
+   回傳 { ok, group, mpp, tileMeters, update(x,z), worldToLatLon(x,z), latLonToWorld(lat,lon), dispose() }
    —— update() 由主迴圈每幀呼叫(內部自己節流):走到哪就補到哪,遠的磚回收。 */
 export async function createRealMap(scene, { lat, lon, radius = 2, z = TILE_Z } = {}) {
   const mpp = metersPerPixel(lat, z);
@@ -144,6 +144,15 @@ export async function createRealMap(scene, { lat, lon, radius = 2, z = TILE_Z } 
       return {
         lat: pxToLat(originPy + worldZ / mpp, z),
         lon: pxToLon(originPx + worldX / mpp, z),
+      };
+    },
+    /* 真實經緯度 → 世界座標(worldToLatLon 的反函數)。
+       🗺 地標任務要用:把「那座公園」放在它**真正的位置**上,而不是「在你附近隨便找個點」——
+       孩子走過去看到的必須真的是那座公園,不然「真實地標」就只是個標籤。 */
+    latLonToWorld(lat2, lon2) {
+      return {
+        x: (lonToPx(lon2, z) - originPx) * mpp,
+        z: (latToPx(lat2, z) - originPy) * mpp,
       };
     },
     dispose() {

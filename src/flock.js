@@ -1,42 +1,21 @@
 // 羊群系統:基因羊(每隻長相不同)+羊圈圖鑑(跨站格式)+皮克敏式跟隨+戰鬥天賦。
-// ★ B 案接口:圖鑑存 localStorage `hfpc-sheepdex-v1`,格式見 DEX 註解——
-//   尋羊記(sheepquest,GPS 抓寶版)日後對接同一格式,兩站互通(source: '3d' | 'gps')。
 // ★ 神學鐵則:羊是牧人保護與同行的羊群(約10:3-4 按名叫羊、羊跟著牧人),不是攻擊單位;
 //   戰鬥中羊只做支援(引開/擋一次/找蜜/唱詩),永遠不會死。
+//
+// ★★ 圖鑑格式與基因表**不在這個檔**:它們是與尋羊記(sheepquest)共用的跨站格式,
+//    正本 = skill `sheepdex-crossite/assets/sheepdex.js`,本 repo 的複本 = ./sheepdex.js。
+//    要改格式/加顏色請改正本再搬過來(0809「共用 core 鐵則」:共用邏輯不複製第二份實作)。
+//    本檔只留**three.js 專屬**的部分:基因羊模型、縮圖、圖鑑展示台。
 import * as THREE from "three";
 
-// ---------- 天賦(gift)=戰鬥支援能力,同時決定配飾外觀 ----------
-export const GIFTS = {
-  bell: { label: "鈴鐺羊", icon: "🔔", desc: "搖鈴引開野獸的注意,撲擊會慢下來" },
-  wool: { label: "絨毛羊", icon: "🧣", desc: "蓬蓬的絨毛替牧人擋下一次重擊" },
-  swift: { label: "快腿羊", icon: "🍯", desc: "腿快鼻靈,野地的蜂蜜更常被牠找到" },
-  song: { label: "詩歌羊", icon: "🎵", desc: "咩咩唱詩,牧人的勇氣慢慢恢復" },
-};
-export const GIFT_ORDER = ["bell", "wool", "swift", "song"];
+// UMD 資產:import 只為了跑它的掛載(它會無條件掛上 globalThis.SheepDex——理由見該檔檔頭,
+// 簡述:Rollup 會走 CJS 那支,傳統 UMD 的 else 分支永遠不執行 ⇒ 那樣寫整包 JS 會死掉)。
+import "./sheepdex.js";
+const SD = /** @type {any} */ (globalThis).SheepDex;
+if (!SD) throw new Error("sheepdex.js 沒有掛上 globalThis.SheepDex(垂直搬運的複本壞了?)");
 
-const WOOL_COLORS = [0xf4efe3, 0xefe3cf, 0xe8e8ee, 0xd9cbb2, 0xcbb9a2, 0x8a7a6a, 0x4a4038, 0xf2ddda];
-const FACE_COLORS = [0x3a3128, 0x6b5138, 0x2b2b30, 0x8a6a4a, 0xcaa27a];
-const SPOTS = ["none", "none", "patch", "dots"];
-const EARS = ["up", "down", "long"];
-const EYES = ["round", "sleepy", "happy"];
-
-export const NAME_POOL = [
-  "小雪", "棉棉", "咩咩", "乖乖", "毛毛", "恩典", "平安", "喜樂", "小雲", "奶油",
-  "小星", "月光", "阿寶", "糰子", "泡泡", "小福", "路得", "迦勒", "小羔", "白白",
-];
-
-export function randomGenes(rand = Math.random) {
-  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
-  return {
-    wool: pick(WOOL_COLORS),
-    face: pick(FACE_COLORS),
-    spots: pick(SPOTS),
-    ears: pick(EARS),
-    eyes: pick(EYES),
-    gift: pick(GIFT_ORDER),
-    size: 0.88 + rand() * 0.26,
-  };
-}
+// 對外維持原本的名字(main.js / game.js 的 import 一行都不用改)
+export const { GIFTS, GIFT_ORDER, NAME_POOL, randomGenes, genesFromSeed, hexCss } = SD;
 
 // ---------- 基因羊模型(tsum 圓萌基因;臉朝 +z=引擎慣例) ----------
 export function makeGeneSheep(genes) {
@@ -264,67 +243,16 @@ export function drawSheepPortrait(canvas, genes) {
   ctx.fill();
 }
 
-// ---------- 羊圈圖鑑(跨站格式;B 案接口) ----------
-// {
-//   v: 1,
-//   sheep: [{ id, name, genes:{wool,face,spots,ears,eyes,gift,size}, verse, foundAt, source: '3d'|'gps' }],
-//   squad: [id, id, id],     // 出戰(最多 3)
-//   follow: [id, ...],       // 伴行(最多 5;漫遊時跟在身邊)
-//   updatedAt
-// }
-export const DEX_KEY = "hfpc-sheepdex-v1";
-export const SQUAD_MAX = 3;
-export const FOLLOW_MAX = 5;
+// ---------- 羊圈圖鑑(跨站格式)----------
+// 實作全在 ./sheepdex.js(skill sheepdex-crossite 的垂直搬運複本),這裡只是把名字接出去。
+// 格式說明、三條鐵則(確定性外觀 / 確定性 id / 多的原樣留)都寫在那支檔的檔頭。
+export const {
+  DEX_KEY, SQUAD_MAX, FOLLOW_MAX,
+  loadDex, saveDex, exportDexText, importDexText, mergeDex,
+  makeEntry, addSheep, gpsSheepId, normalizeEntry, dexStats,
+} = SD;
 
-export function loadDex() {
-  try {
-    const raw = localStorage.getItem(DEX_KEY);
-    const d = raw ? JSON.parse(raw) : null;
-    if (d && d.v === 1 && Array.isArray(d.sheep)) {
-      d.squad = Array.isArray(d.squad) ? d.squad : [];
-      d.follow = Array.isArray(d.follow) ? d.follow : [];
-      return d;
-    }
-  } catch { /* 壞檔=重新開始,不炸 */ }
-  return { v: 1, sheep: [], squad: [], follow: [], updatedAt: 0 };
-}
-
-export function saveDex(dex) {
-  try {
-    dex.updatedAt = Date.now();
-    localStorage.setItem(DEX_KEY, JSON.stringify(dex));
-  } catch { /* 私密模式:本場有效,不炸 */ }
-}
-
-export function addSheepToDex(dex, name, genes) {
-  const entry = {
-    id: "s_" + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
-    name, genes, verse: "路15:5", foundAt: Date.now(), source: "3d",
-  };
-  dex.sheep.push(entry);
-  if (dex.follow.length < FOLLOW_MAX) dex.follow.push(entry.id);
-  if (dex.squad.length < SQUAD_MAX) dex.squad.push(entry.id);
-  saveDex(dex);
-  return entry;
-}
-
-export function exportDexText(dex) {
-  return JSON.stringify(dex, null, 1);
-}
-
-// 匯入=合併(同 id 略過),回傳新增數;壞 JSON 回 -1
-export function importDexText(dex, text) {
-  try {
-    const inc = JSON.parse(text);
-    if (!inc || inc.v !== 1 || !Array.isArray(inc.sheep)) return -1;
-    const have = new Set(dex.sheep.map((s) => s.id));
-    let added = 0;
-    for (const s of inc.sheep) {
-      if (s && s.id && s.genes && !have.has(s.id)) { dex.sheep.push(s); added += 1; }
-    }
-    saveDex(dex);
-    return added;
-  } catch {
-    return -1;
-  }
+// 3D 側的「取名後入圈」:名字是使用者當場打的,所以用時間+亂數的 s_ id(獨立個體)。
+export function addSheepToDex(dex, name, genes, extra = {}) {
+  return SD.addSheep(dex, SD.makeEntry({ name, genes, source: "3d", ...extra }));
 }
