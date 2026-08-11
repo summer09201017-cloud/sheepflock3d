@@ -13,6 +13,29 @@
 > 關圖鑑 → game.refreshFlock() 漫遊中立即換班(戰鬥中刻意不重建,防絨毛盾冷卻被洗);走近石圈一次性提示。
 > ⚠ 路15 語音 mp3 收割自 sheepquest/voice,manifest 對映的唸稿字串在 voicePhrases.FLOCK_SCRIPTURES,改一個字 hash 就對不上=靜默。
 
+> v3(0811 使用者三點回饋,agape250 機):
+> ① **圖鑑 3D 會動的羊**(`createSheepShowcase` in flock.js):**單一** WebGLRenderer 逐卡 render→drawImage
+>    到各卡 2D canvas(一卡一個 context 會撞瀏覽器 8~16 上限=黑圖);IntersectionObserver 只畫看得到的卡;
+>    ~30fps;關視窗 `clear()` 停 rAF;WebGL 開不起來→`ok:false` 退回 `drawSheepPortrait` 2D。
+>    取名視窗另開一個 showcase 實例(免得 clear 互相清掉)。圈中休息的羊也會低頭吃草(`updatePenSheep`)。
+> ② **妹妹的咩咩聲**:BLEATS 四句用 **zh-TW-HsiaoYuNeural(曉雨)** 預烤;`playBleat(pitch)` 走
+>    **獨立三顆 Audio 音池**(走 speakLine 會跟經文搶同一顆 Audio ⇒ 咩一聲切斷經文);
+>    pitch=1.3+(1−size) ⇒ 小羊更高更奶聲;迷羊呼喚 1.25、初次見面 1.35。
+> ③ **🗺 真實地圖漫遊**(`src/realmap.js`,首頁「牧場漫遊的地面」三選一:曠野/GPS/台北測試):
+>    CARTO Voyager 圖磚(=尋羊記同一份 OSM 底圖)鋪成 3D 地面,z18 一磚≈138m;
+>    **只等腳下那一塊就開場**(等 5×5 全載要 7~9 秒=按下出發乾等),其餘 fire-and-forget、走到哪補到哪、
+>    離開 radius+1 就回收貼圖;`worldToLatLon()` 可反推所在經緯度。
+>    ⚠ 四個「換地圖才會露出來」的坑,都已修:
+>      (a) **clamp 例外**:`movePos`/擊退/迷羊生成改吃 `this.bound`(真實地圖 400,曠野仍 15)——
+>          不改的話地圖是真的、腳步卻被關在 ±15m 的圍欄裡;
+>      (b) **漫遊鏡頭焦點**:側面/俯瞰原本以「玩家與野獸中點」為焦點,漫遊沒有野獸⇒鏡頭飄向隱形獸;
+>      (c) **fog 每幀被 updateWeather 覆寫**=enableRealMap 設的遠景霧從來沒生效(寫了被蓋掉);
+>          且圖磚是 MeshBasicMaterial 不受光 ⇒ 日夜循環會變成「黑天配白地」⇒ 真實地圖鎖正午;
+>      (d) 迷羊散佈 9~13m → 35~110m、光柱 6m → 34m,HUD「與野獸距離」漫遊時改顯示「離迷羊距離」。
+>    ★ 授權鐵則:OSM 圖磚當地面**必須**標來源(#mapCredit「© OpenStreetMap 貢獻者 © CARTO」,同尋羊記)。
+>    ★ 離線鐵則:拿不到定位或圖磚下載失敗 ⇒ 退回曠野牧場照玩,絕不卡住(教會沒網路也要能上課)。
+>    定位用 `watchPosition`(getCurrentPosition 一次逾時就死)+ LINE/FB WebView 明講怎麼換瀏覽器。
+
 以下為 davidbeasts3d 底座原文(戰鬥引擎照舊適用):
 
 # CLAUDE.md — davidbeasts3d(3D 大衛打獅熊・護羊之戰,撒母耳記上十七章)

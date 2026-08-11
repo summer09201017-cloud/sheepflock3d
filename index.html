@@ -47,6 +47,8 @@
 
       <button id="pauseButton" class="pause-fab">暫停</button>
       <button id="dexFab" class="dex-fab" hidden>🐑 羊圈</button>
+      <!-- 🗺 用 OSM 圖磚當地面時必須標示來源(OpenStreetMap 的授權要求,不是可選的裝飾;同尋羊記) -->
+      <div id="mapCredit" class="map-credit" hidden>🗺 腳下的地圖 © OpenStreetMap 貢獻者 © CARTO</div>
 
       <div class="message-ribbon" id="statusMessage">選擇模式與野獸陣容後開始。</div>
       <div class="commentary-bar" id="commentaryBar" hidden></div>
@@ -70,7 +72,7 @@
             <strong id="difficultyLabel">標準</strong>
           </div>
           <div>
-            <span class="mini-label">與野獸距離</span>
+            <span class="mini-label" id="gapSideTitle">與野獸距離</span>
             <strong id="gapSideLabel">—</strong>
           </div>
           <div>
@@ -223,6 +225,15 @@
                 <option value="hard">全力獸王</option>
                 <option value="death">死神(黑獸)⚠ 膽小勿入</option>
               </select>
+
+              <!-- 🗺 0811 使用者點名:像尋羊記一樣走在真實地圖上(只影響「牧場漫遊・尋羊」) -->
+              <label class="field-label" for="realMapSelect">牧場漫遊的地面</label>
+              <select id="realMapSelect">
+                <option value="off">🌾 伯利恆曠野牧場(離線也能玩)</option>
+                <option value="gps">🗺 我家附近的真實地圖(需定位+網路)</option>
+                <option value="demo">🧪 台北測試地圖(不用開定位)</option>
+              </select>
+              <p class="install-hint" id="realMapHint">選真實地圖時,牧人和羊群會走在你所在位置的街道上——羊散在附近幾百公尺,像尋羊記那樣把牠們找回來。</p>
 
               <label class="field-label" for="audioSelect">音效與播報</label>
               <select id="audioSelect">

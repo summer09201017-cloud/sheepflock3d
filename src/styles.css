@@ -185,6 +185,21 @@ body::before {
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
 }
 
+/* 🗺 地圖來源標示(OSM 授權要求):壓在畫面右下角,小而不擋玩 */
+.map-credit {
+  position: absolute;
+  right: max(0.6rem, env(safe-area-inset-right));
+  bottom: max(0.4rem, env(safe-area-inset-bottom));
+  z-index: 6;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(7, 18, 29, 0.62);
+  color: #e8f0f6;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 /* 🐑 遊戲中隨時開羊圈(手機也按得到;暫停鈕在左上,這顆疊在它下面) */
 .dex-fab {
   position: absolute;

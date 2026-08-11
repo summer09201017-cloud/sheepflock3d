@@ -143,7 +143,80 @@ export function makeGeneSheep(genes) {
   return { group, legs, body };
 }
 
-// ---------- 圖鑑頭像(2D canvas,列表用,不開 WebGL) ----------
+// ---------- 🐑 3D 動態頭像(0811 使用者點名「圖鑑的羊要像皮克敏一樣 3D 會動」) ----------
+// 共用**單一** WebGLRenderer 逐卡繪製再 drawImage 到各卡的 2D canvas——
+// 一卡一個 WebGL context 會超過瀏覽器上限(8~16 個)直接黑圖,不可以。
+// WebGL 開不起來(舊平板)→ 回傳 ok:false,呼叫端退回 drawSheepPortrait 2D 頭像。
+export function createSheepShowcase() {
+  let renderer = null;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(168, 168, false);
+  } catch {
+    return { ok: false, add() {}, clear() {} };
+  }
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 20);
+  camera.position.set(0, 1.0, 2.7);
+  camera.lookAt(0, 0.52, 0);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  const sun = new THREE.DirectionalLight(0xfff2d8, 1.25);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+  const entries = [];
+  let raf = 0;
+  let last = 0;
+  const tick = (now) => {
+    raf = requestAnimationFrame(tick);
+    if (now - last < 33) return; // ~30fps:夠順又省手機電
+    last = now;
+    const t = now / 1000;
+    for (const e of entries) {
+      if (!e.visible) continue;
+      e.model.group.visible = true;
+      const tt = t + e.phase;
+      e.model.group.rotation.y = tt * 0.9;                                   // 轉盤慢轉
+      e.model.group.position.y = Math.abs(Math.sin(tt * 5)) * 0.05;          // 小蹦跳
+      e.model.legs.forEach((leg, i) => {
+        leg.rotation.x = Math.sin(tt * 5 + (i % 2 ? Math.PI : 0)) * 0.5;     // 原地踏步
+      });
+      renderer.render(scene, camera);
+      e.ctx.clearRect(0, 0, e.canvas.width, e.canvas.height);
+      e.ctx.drawImage(renderer.domElement, 0, 0, e.canvas.width, e.canvas.height);
+      e.model.group.visible = false;
+    }
+  };
+  // 捲出視野的卡不渲染(圖鑑幾十隻時省一大截)
+  const io = typeof IntersectionObserver !== "undefined"
+    ? new IntersectionObserver((obs) => {
+      for (const x of obs) {
+        const e = entries.find((n) => n.canvas === x.target);
+        if (e) e.visible = x.isIntersecting;
+      }
+    })
+    : null;
+  return {
+    ok: true,
+    add(canvas, genes) {
+      const model = makeGeneSheep(genes);
+      model.group.visible = false;
+      scene.add(model.group);
+      entries.push({ canvas, ctx: canvas.getContext("2d"), model, phase: Math.random() * 10, visible: !io });
+      if (io) io.observe(canvas);
+      if (!raf) raf = requestAnimationFrame(tick);
+    },
+    clear() {
+      for (const e of entries) {
+        scene.remove(e.model.group);
+        if (io) io.unobserve(e.canvas);
+      }
+      entries.length = 0;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    },
+  };
+}
+
+// ---------- 圖鑑頭像(2D canvas,WebGL 開不起來時的退路) ----------
 export function drawSheepPortrait(canvas, genes) {
   const g = genes;
   const ctx = canvas.getContext("2d");

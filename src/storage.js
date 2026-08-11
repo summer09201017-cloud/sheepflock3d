@@ -6,6 +6,7 @@ const defaultSettings = {
   modeId: "duel",
   beastId: "lion1",
   audioEnabled: true,
+  realMap: "off", // 🗺 牧場漫遊的地面:off=曠野牧場 / gps=真實地圖 / demo=台北測試地圖
 };
 
 function parseValue(value, fallback) {

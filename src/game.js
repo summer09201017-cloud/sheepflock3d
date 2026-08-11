@@ -1003,6 +1003,9 @@ export class WarriorGame {
     rim.position.set(-25, 30, 25);
     this.scene.add(rim);
 
+    // 🗺 真實地圖模式要把「曠野牧場」整組藏起來(遠山/橄欖樹/草地不能疊在台北街道上)。
+    // 這裡用「前後快照 scene.children」收集本段加進去的物件——比在 buildPasture 裡逐行改 this.scene.add 安全。
+    const beforePasture = this.scene.children.length;
     const grass = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ color: 0x99a052, roughness: 1 }));
     grass.rotation.x = -Math.PI / 2;
     grass.position.y = -0.02;
@@ -1013,6 +1016,7 @@ export class WarriorGame {
     this.scene.add(soil);
 
     this.buildPasture();
+    this.pastureObjects = this.scene.children.slice(beforePasture);
     this._buildFighters();
 
     // 擊中閃光
@@ -1312,7 +1316,9 @@ export class WarriorGame {
     // 🐑 羊圈裡的羊:已尋回但這次沒帶出門的,待在東側石圈裡休息(看得到自己的收藏;上限 10)
     for (const p of this.penSheep || []) this.scene.remove(p.group);
     this.penSheep = [];
-    if (this.roam || this.mode.roam) {
+    // 🗺 真實地圖模式不放圈中羊:石砌羊圈跟著曠野牧場一起收起來了,
+    // 只留羊在街上會變成「一群羊浮在馬路中間、旁邊沒有圈」——看羊改走 🐑 圖鑑鈕。
+    if ((this.roam || this.mode.roam) && !this.realMap) {
       const F = ARENA_HALF + 2;
       const out = new Set(ids);
       const resting = dex.sheep.filter((s) => !out.has(s.id)).slice(0, 10);
@@ -1323,6 +1329,8 @@ export class WarriorGame {
         p.group.position.set(F + 7 + Math.cos(a) * r, 0, F * 0.4 + Math.sin(a) * r);
         p.group.rotation.y = Math.random() * Math.PI * 2;
         this.scene.add(p.group);
+        p.phase = Math.random() * 10;    // 各自的節奏,不會整群同步(像一群真的羊)
+        p.baseY = p.group.rotation.y;
         this.penSheep.push(p);
       });
     }
@@ -1331,6 +1339,48 @@ export class WarriorGame {
   // 🐑 圖鑑改了伴行名單 → 漫遊中立即重建場上羊與圈中羊;戰鬥中不重建(絨毛盾等冷卻會被洗掉),下一場才生效
   refreshFlock() {
     if (this.roam && this.phase === "battle") this._setupFlockForMatch();
+  }
+
+  /* 🗺 開啟真實地圖地面(0811「像尋羊記一樣走在真實的 3D 地圖上」)。
+     成功=腳下換成你所在位置的街道、活動範圍放大到 ±400 公尺、曠野牧場整組收起來;
+     失敗(沒網路/圖磚被擋)=回 false,呼叫端就留在曠野牧場照玩(離線鐵則)。 */
+  async enableRealMap(lat, lon) {
+    const { createRealMap } = await import("./realmap.js");
+    let map = null;
+    try {
+      map = await createRealMap(this.scene, { lat, lon, radius: 2 });
+    } catch {
+      map = { ok: false, reason: "exception" };
+    }
+    if (!map.ok) return false;
+    this.realMap = map;
+    this.bound = 400;                                   // 走得出去才叫「走在地圖上」
+    for (const o of this.pastureObjects || []) o.visible = false;
+    // 還沒補到的磚底下要有東西:不然遠處是天空的顏色,看起來像世界破了一個洞
+    if (!this.mapBase) {
+      this.mapBase = new THREE.Mesh(
+        new THREE.PlaneGeometry(1400, 1400),
+        new THREE.MeshBasicMaterial({ color: 0xe8e6df }),
+      );
+      this.mapBase.rotation.x = -Math.PI / 2;
+      this.mapBase.position.y = -0.02;
+      this.scene.add(this.mapBase);
+    }
+    this.mapBase.visible = true;
+    this.scene.fog = new THREE.Fog(0xcfe2f2, 90, 320);  // 遠一點才看得到街廓,不然一片霧
+    this.camera.far = 700;
+    this.camera.updateProjectionMatrix();
+    return true;
+  }
+
+  disableRealMap() {
+    if (this.realMap) { this.realMap.dispose(); this.realMap = null; }
+    if (this.mapBase) this.mapBase.visible = false;
+    this.bound = ARENA_HALF;
+    for (const o of this.pastureObjects || []) o.visible = true;
+    this.scene.fog = new THREE.Fog(0xbfd8ec, 55, 150);
+    this.camera.far = 220;
+    this.camera.updateProjectionMatrix();
   }
 
   _addFlockEntity(rec) {
@@ -1378,14 +1428,30 @@ export class WarriorGame {
       s.bleatT -= dt;
       if (s.bleatT <= 0) {
         s.bleatT = 6 + Math.random() * 10;
-        this.emitEvent("sheep-bleat", { pitch: 1 + (1 - s.genes.size) });
+        // 妹妹的咩咩聲:小羊更高更奶聲(size 0.88~1.14 → pitch 1.42~1.16)
+        this.emitEvent("sheep-bleat", { pitch: 1.3 + (1 - s.genes.size) });
       }
       prev = s;
     }
   }
 
+  // 🐑 圈裡休息的羊也要會動:低頭吃草的小晃+偶爾換個方向(不走出圈,免得看起來像逃跑)
+  updatePenSheep() {
+    for (const p of this.penSheep || []) {
+      const t = this.time + p.phase;
+      p.group.position.y = Math.abs(Math.sin(t * 1.6)) * 0.03;
+      p.group.rotation.y = p.baseY + Math.sin(t * 0.35) * 0.5;
+      p.legs.forEach((leg, i) => {
+        leg.rotation.x = Math.sin(t * 1.6 + (i % 2 ? Math.PI : 0)) * 0.12;
+      });
+    }
+  }
+
   // ---------- 🐑 漫遊:迷羊出現與尋回(路15:4-6) ----------
   updateRoam(dt) {
+    this.updatePenSheep();
+    // 🗺 走到哪就把地圖補到哪(realmap 內部自己節流,同一格磚內不重算)
+    if (this.realMap) this.realMap.update(this.my.pos.x, this.my.pos.z);
     if (this.holdRoam) return;
     // 走近東側石圈=看見圈中休息的羊,提示可開圖鑑挑選(每次漫遊只提示一次)
     if (!this._penHint) {
@@ -1425,21 +1491,28 @@ export class WarriorGame {
     const genes = randomGenes();
     const person = makeGeneSheep(genes);
     // 出現在牧人一段距離外的環帶上(看得到方向、要走一小段)
+    // 🗺 真實地圖:散到 35~110 公尺外的街區——沿用曠野的 9~13 公尺會變成「一出門就踩到羊」,
+    //    整個「走出去找」的重點就沒了(這是換地圖才會露出來的體驗 bug,不是數值偏好)。
     const a = Math.random() * Math.PI * 2;
-    const r = 9 + Math.random() * 4.5;
-    const x = clamp(this.my.pos.x + Math.cos(a) * r, -ARENA_HALF + 1, ARENA_HALF - 1);
-    const z = clamp(this.my.pos.z + Math.sin(a) * r, -ARENA_HALF + 1, ARENA_HALF - 1);
+    const r = this.realMap ? 35 + Math.random() * 75 : 9 + Math.random() * 4.5;
+    const sb = (this.bound || ARENA_HALF) - 1; // 真實地圖模式=迷羊散在幾百公尺的街區裡(同 movePos 的 clamp 例外)
+    const x = clamp(this.my.pos.x + Math.cos(a) * r, -sb, sb);
+    const z = clamp(this.my.pos.z + Math.sin(a) * r, -sb, sb);
     person.group.position.set(x, 0, z);
     // 柔光柱=遠遠就看得到牠在哪(兒童友善指引)
+    // 🗺 真實地圖上羊在上百公尺外,光柱要又高又粗才看得到(6 公尺的柱子在 100 公尺外=一個小點)
+    const bh = this.realMap ? 34 : 6;
     const beacon = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.7, 6, 12, 1, true),
+      new THREE.CylinderGeometry(this.realMap ? 1.5 : 0.5, this.realMap ? 2.1 : 0.7, bh, 12, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xffe89a, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }),
     );
-    beacon.position.set(0, 3, 0);
+    beacon.position.set(0, bh / 2, 0);
     person.group.add(beacon);
     this.scene.add(person.group);
     this.lost = { genes, group: person.group, person, pos: new THREE.Vector3(x, 0, z), bleatT: 0.5, beacon };
-    this.message = "聽——有迷失的羊在咩咩叫!循著光柱走過去。";
+    this.message = this.realMap
+      ? `聽——有迷失的羊在咩咩叫!牠在 ${Math.round(r)} 公尺外,循著金色光柱走過去(Shift 快跑)。`
+      : "聽——有迷失的羊在咩咩叫!循著光柱走過去。";
     this.emitEvent("lost-appear", {});
     this.pushHud();
   }
@@ -1758,8 +1831,8 @@ export class WarriorGame {
       if (dir.lengthSq() > 0.0001) {
         dir.normalize();
         target.pos.addScaledVector(dir, knockback);
-        target.pos.x = clamp(target.pos.x, -ARENA_HALF, ARENA_HALF);
-        target.pos.z = clamp(target.pos.z, -ARENA_HALF, ARENA_HALF);
+        target.pos.x = clamp(target.pos.x, -(this.bound || ARENA_HALF), this.bound || ARENA_HALF);
+        target.pos.z = clamp(target.pos.z, -(this.bound || ARENA_HALF), this.bound || ARENA_HALF);
       }
     }
     this.hitFlash.position.copy(target.pos).setY(1.5);
@@ -1935,7 +2008,12 @@ export class WarriorGame {
       [9, 0x8fc4e8, 2.1], [16, 0x8fc4e8, 2.1], [18.5, 0xf0854f, 1.0],
       [20, 0x0a2050, 0.35], [24, 0x0a2050, 0.35],
     ];
-    const h = this.dayHours();
+    /* 🗺 真實地圖模式鎖在正午:圖磚是**不受光**的貼圖(MeshBasicMaterial),
+       日夜循環只會讓天空變黑、地面照樣雪亮 ⇒ 走一走就變成「黑天配白地」像壞掉。
+       ⚠ 順帶治一個沉默的洞:fog 的 near/far 每幀都在這裡被覆寫,
+       enableRealMap 裡設的遠景霧其實**從來沒生效過**(設了沒用=典型的寫了被蓋掉)。 */
+    const rm = !!this.realMap;
+    const h = rm ? 12 : this.dayHours();
     let a = KEYS[0], b = KEYS[KEYS.length - 1];
     for (let i = 0; i < KEYS.length - 1; i += 1) {
       if (h >= KEYS[i][0] && h <= KEYS[i + 1][0]) { a = KEYS[i]; b = KEYS[i + 1]; break; }
@@ -1947,8 +2025,8 @@ export class WarriorGame {
     const gust = Math.max(0, Math.min(1, (Math.sin(this.time * 0.12) - 0.55) / 0.45));
     if (this.scene.fog) {
       this.scene.fog.color.copy(ca);
-      this.scene.fog.near = 55 - 30 * gust;
-      this.scene.fog.far = 150 - 76 * gust;
+      this.scene.fog.near = rm ? 140 - 40 * gust : 55 - 30 * gust;
+      this.scene.fog.far = rm ? 460 - 120 * gust : 150 - 76 * gust;
     }
     if (this.snowFx) {
       const attr = this.snowFx.pts.geometry.getAttribute("position");
@@ -2211,8 +2289,11 @@ export class WarriorGame {
   movePos(f, dt) {
     f.pos.x += Math.sin(f.heading) * f.speed * dt;
     f.pos.z += Math.cos(f.heading) * f.speed * dt;
-    const nx = clamp(f.pos.x, -ARENA_HALF, ARENA_HALF);
-    const nz = clamp(f.pos.z, -ARENA_HALF, ARENA_HALF);
+    // ⚠ clamp 例外(side-1d-engine-kit 的經典炸點):真實地圖模式活動範圍要放大到幾百公尺,
+    // 沿用 ±15 的話,地圖鋪好了人卻在原地撞牆——地圖是真的、腳步卻被關在羊圈裡。
+    const b = this.bound || ARENA_HALF;
+    const nx = clamp(f.pos.x, -b, b);
+    const nz = clamp(f.pos.z, -b, b);
     if (nx !== f.pos.x || nz !== f.pos.z) f.speed *= 0.5;
     f.pos.x = nx;
     f.pos.z = nz;
@@ -2548,7 +2629,11 @@ export class WarriorGame {
     let desiredPos;
     let desiredLook;
     const focusFoe = this.nearestFoe() || this.foes[0];
-    const mid = this.my.pos.clone().add(focusFoe.pos).multiplyScalar(0.5);
+    /* ⚠ 漫遊沒有野獸(牠們是隱形的),用「玩家與野獸的中點」當焦點會讓側面/俯瞰鏡頭
+       飄到看不見的獸那邊——畫面上人跑到角落、中間空一片。漫遊一律以牧人自己為焦點。 */
+    const mid = this.roam
+      ? this.my.pos.clone()
+      : this.my.pos.clone().add(focusFoe.pos).multiplyScalar(0.5);
     if (this.phase === "menu") {
       const a = this.time * 0.08;
       desiredPos = new THREE.Vector3(Math.cos(a) * 22, 8, Math.sin(a) * 22);
@@ -2569,11 +2654,17 @@ export class WarriorGame {
       desiredPos = this.my.pos.clone().addScaledVector(side, 5.0).addScaledVector(fwd, 0.8).setY(2.1);
       desiredLook = this.my.pos.clone().addScaledVector(fwd, 1.2).setY(1.15);
     } else if (this.cameraView === 2) {
-      desiredPos = new THREE.Vector3(ARENA_HALF + 5, 3.2, clamp(mid.z, -10, 10));
+      // 側面轉播:戰鬥=場邊固定機位;漫遊=跟著牧人的側邊(固定機位會被走出畫面)
+      desiredPos = this.roam
+        ? mid.clone().add(new THREE.Vector3(9, 3.4, 0))
+        : new THREE.Vector3(ARENA_HALF + 5, 3.2, clamp(mid.z, -10, 10));
       desiredLook = mid.clone().setY(1.2);
     } else if (this.cameraView === 3) {
-      desiredPos = new THREE.Vector3(mid.x, 22, mid.z + 2);
-      desiredLook = mid.clone().setY(0.5);
+      // 高空俯瞰:漫遊(尤其真實地圖)拉高一點+略朝行進方向,看得到整片街廓與遠處的光柱
+      const h = this.roam ? 30 : 22;
+      const fwd = new THREE.Vector3(Math.sin(this.my.heading), 0, Math.cos(this.my.heading));
+      desiredPos = mid.clone().addScaledVector(fwd, this.roam ? -6 : 0).setY(h);
+      desiredLook = mid.clone().addScaledVector(fwd, this.roam ? 6 : 0).setY(0.5);
     } else {
       const fwd = new THREE.Vector3(Math.sin(this.my.heading), 0, Math.cos(this.my.heading));
       desiredPos = this.my.pos.clone().addScaledVector(fwd, 0.3).setY(2.0);
@@ -2617,7 +2708,10 @@ export class WarriorGame {
       charge01: this.my.chargeT >= 0 ? clamp(this.my.chargeT / CHARGE_FULL, 0, 1) : 0,
       chargeReady: this.my.chargeT >= CHARGE_MIN,
       inReach,
-      gapText: !this.roam && this.phase === "battle" && nearest ? `${dist.toFixed(1)} m` : "—",
+      // 漫遊改顯示「離迷羊還有多遠」——真實地圖上羊在上百公尺外,只有光柱不夠,要有數字才知道走對沒
+      gapText: this.roam
+        ? (this.lost ? `🐑 ${Math.round(Math.hypot(this.lost.pos.x - this.my.pos.x, this.lost.pos.z - this.my.pos.z))} m` : "—")
+        : (this.phase === "battle" && nearest ? `${dist.toFixed(1)} m` : "—"),
       lastHit: this.lastHit,
       roam: this.roam,
       flockCount: this.flock.length,

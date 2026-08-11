@@ -1,10 +1,10 @@
 import "./styles.css";
 import { WarriorGame, GAME_MODES } from "./game.js";
 import { AudioManager } from "./audio.js";
-import { speakLine, setVoiceEnabled } from "./voice.js";
+import { speakLine, setVoiceEnabled, playBleat } from "./voice.js";
 import { PHRASES, SCRIPTURES, FLOCK_SCRIPTURES } from "./voicePhrases.js";
 import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
-import { GIFTS, NAME_POOL, loadDex, saveDex, addSheepToDex, drawSheepPortrait, exportDexText, importDexText, SQUAD_MAX, FOLLOW_MAX } from "./flock.js";
+import { GIFTS, NAME_POOL, loadDex, saveDex, addSheepToDex, drawSheepPortrait, exportDexText, importDexText, SQUAD_MAX, FOLLOW_MAX, createSheepShowcase } from "./flock.js";
 
 const ui = {
   canvas: document.querySelector("#gameCanvas"),
@@ -15,6 +15,7 @@ const ui = {
   passLabel: document.querySelector("#passLabel"),
   gapLabel: document.querySelector("#gapLabel"),
   gapSideLabel: document.querySelector("#gapSideLabel"),
+  gapSideTitle: document.querySelector("#gapSideTitle"),
   lastPassLabel: document.querySelector("#lastPassLabel"),
   phaseLabel: document.querySelector("#phaseLabel"),
   statusMessage: document.querySelector("#statusMessage"),
@@ -56,6 +57,8 @@ const ui = {
   dexButton: document.querySelector("#dexButton"),
   dexButtonGame: document.querySelector("#dexButtonGame"),
   dexFab: document.querySelector("#dexFab"),
+  realMapSelect: document.querySelector("#realMapSelect"),
+  mapCredit: document.querySelector("#mapCredit"),
   dexModal: document.querySelector("#dexModal"),
   dexGrid: document.querySelector("#dexGrid"),
   dexCount: document.querySelector("#dexCount"),
@@ -93,6 +96,7 @@ function persistSettings() {
     modeId: selectedModeId,
     beastId: selectedBeastId,
     audioEnabled,
+    realMap: ui.realMapSelect ? ui.realMapSelect.value : "off",
   });
 }
 
@@ -126,6 +130,16 @@ function syncMenuControls() {
   syncMenuCards();
 }
 
+// 🗺 地面選擇要記得(不然每次都要重選);change 時存檔
+if (ui.realMapSelect) {
+  ui.realMapSelect.value = settings.realMap || "off";
+  ui.realMapSelect.addEventListener("change", () => {
+    unlockAudio();
+    audio.uiTap();
+    persistSettings();
+  });
+}
+
 function syncGameConfigurationToMenu() {
   selectedModeId = game.modeId;
   selectedDifficulty = game.difficulty;
@@ -147,6 +161,8 @@ function openHomeScreen() {
   syncGameConfigurationToMenu();
   ui.homeScreen.classList.add("visible");
   ui.dexFab.hidden = true;
+  game.disableRealMap();     // 回首頁=收掉地圖圖磚(下次出發再依設定重鋪),手機記憶體不留著
+  ui.mapCredit.hidden = true;
 }
 
 function closeHomeScreen() {
@@ -186,8 +202,12 @@ function handleGameEvent(event) {
       pushCommentary("有迷失的羊!循著光柱走過去。", "cool", null);
       break;
     }
-    case "sheep-cry": {
-      audio.rebound();
+    case "sheep-cry": { // 迷羊在遠處呼喚:妹妹的咩咩聲(略高=著急的小羊)
+      playBleat(1.25);
+      break;
+    }
+    case "sheep-bleat": { // 跟著走的羊偶爾咩一聲;體型越小聲音越高(event.pitch 由基因 size 算)
+      playBleat(event.pitch || 1);
       break;
     }
     case "sheep-found": {
@@ -340,12 +360,17 @@ game.onEvent = handleGameEvent;
 // ---------- 🐑 尋回取名(路15:5;約10:3 按著名叫自己的羊) ----------
 let pendingGenes = null;
 let pickedName = "";
+const nameShowcase = createSheepShowcase(); // 取名視窗專用(與圖鑑分開,免得 clear 互相清掉)
 
 function openNameModal(genes) {
   pendingGenes = genes;
   pickedName = "";
   ui.nameInput.value = "";
-  drawSheepPortrait(ui.namePortrait, genes);
+  // 初次見面也給 3D 會動的羊(見面禮比 2D 頭像有感);舊裝置退回 2D
+  nameShowcase.clear();
+  if (nameShowcase.ok) nameShowcase.add(ui.namePortrait, genes);
+  else drawSheepPortrait(ui.namePortrait, genes);
+  playBleat(1.35); // 牠先跟你打招呼
   const gift = GIFTS[genes.gift];
   ui.nameGiftLine.textContent = `${gift.icon} 這是一隻「${gift.label}」——${gift.desc}。`;
   const dex = loadDex();
@@ -378,6 +403,7 @@ ui.nameConfirmButton.addEventListener("click", () => {
   const rec = addSheepToDex(dex, name, pendingGenes);
   pendingGenes = null;
   ui.nameModal.hidden = true;
+  nameShowcase.clear(); // 收工:停掉那張卡的 rAF
   game.adoptLostSheep(rec);
   const total = dex.sheep.length;
   window.psPing?.("sheepflock3d-found");
@@ -389,8 +415,13 @@ ui.nameConfirmButton.addEventListener("click", () => {
 });
 
 // ---------- 🐑 羊圈圖鑑(伴行/出戰選擇+跨站匯出匯入) ----------
+// 🐑 3D 動態頭像(0811 使用者點名「圖鑑的羊要像皮克敏一樣 3D 會動」):
+// 單一 renderer 逐卡繪製(見 flock.js);WebGL 開不起來的舊裝置自動退回 2D 頭像。
+const showcase = createSheepShowcase();
+
 function renderDex() {
   const dex = loadDex();
+  showcase.clear();
   ui.dexCount.textContent = `${dex.sheep.length} 隻・🚶伴行 ${dex.follow.length}/${FOLLOW_MAX}・⚔️出戰 ${dex.squad.length}/${SQUAD_MAX}`;
   ui.dexGrid.innerHTML = "";
   if (!dex.sheep.length) {
@@ -403,7 +434,8 @@ function renderDex() {
     const cv = document.createElement("canvas");
     cv.width = 84;
     cv.height = 84;
-    drawSheepPortrait(cv, s.genes);
+    if (showcase.ok) showcase.add(cv, s.genes); // 3D 會動(轉一圈+踏步+小蹦跳)
+    else drawSheepPortrait(cv, s.genes);        // 舊裝置退路
     card.appendChild(cv);
     const nm = document.createElement("div");
     nm.className = "dex-name";
@@ -461,6 +493,7 @@ window.addEventListener("keydown", (e) => {            // 快捷鍵 B
 ui.dexCloseButton.addEventListener("click", () => {
   audio.uiTap();
   ui.dexModal.hidden = true;
+  showcase.clear();    // 關掉圖鑑就停 rAF(不然 3D 頭像在背景一直轉、吃手機電)
   game.refreshFlock(); // 漫遊中改了伴行名單 → 場上羊與圈中羊立即換班
 });
 ui.dexExportButton.addEventListener("click", () => {
@@ -497,6 +530,8 @@ game.onHudUpdate = (state) => {
   ui.passLabel.textContent = state.roundCap ? `${state.roundNo}/${state.roundCap}` : String(state.roundNo);
   ui.gapLabel.textContent = state.gapText;
   ui.gapSideLabel.textContent = state.gapText;
+  // 漫遊時這欄量的是「離迷羊多遠」,標題要跟著改(不然寫著「與野獸距離」卻顯示羊的距離)
+  if (ui.gapSideTitle) ui.gapSideTitle.textContent = state.roam ? "離迷羊距離" : "與野獸距離";
   ui.lastPassLabel.textContent = state.lastHit
     ? (state.lastHit.who === "me" ? `${state.lastHit.weapon} -${state.lastHit.dmg}` : `挨${state.lastHit.weapon} -${state.lastHit.dmg}`)
     : "—";
@@ -555,7 +590,68 @@ ui.audioSelect.addEventListener("change", (event) => {
   setAudioState(event.target.value === "on");
 });
 
-ui.startMatchButton.addEventListener("click", () => {
+/* 🗺 真實地圖(0811「像尋羊記一樣走在真實的 3D 地圖上」)——取得座標。
+   ★ 三條現場鐵則(全部學自尋羊記 v13~v17 的實戰):
+     ① 用 watchPosition 不用 getCurrentPosition:後者一次逾時就死,前者會一直重試到拿到 fix。
+     ② LINE/FB 內建瀏覽器(WebView)的定位常年拿不到 ⇒ 明講怎麼換瀏覽器,並留「測試地圖」出口。
+     ③ 非 https 一律拿不到定位(瀏覽器規定)——直接說,不要讓使用者乾等。
+   拿不到座標 = 回 null,呼叫端退回曠野牧場,遊戲照玩。 */
+const DEMO_LATLON = { lat: 25.0330, lon: 121.5654 }; // 台北車站(同尋羊記的客廳測試起點)
+
+function getPosition(timeoutMs = 9000) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation || !window.isSecureContext) return resolve(null);
+    let done = false;
+    let watchId = null;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      resolve(v);
+    };
+    watchId = navigator.geolocation.watchPosition(
+      (p) => finish({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      () => finish(null),
+      { enableHighAccuracy: true, maximumAge: 15000 },
+    );
+    setTimeout(() => finish(null), timeoutMs);
+  });
+}
+
+async function setupGroundForMatch() {
+  const want = ui.realMapSelect.value;
+  const isRoam = selectedModeId === "seek";
+  game.disableRealMap();
+  ui.mapCredit.hidden = true;
+  if (want === "off" || !isRoam) return;
+  let pos = null;
+  if (want === "demo") {
+    pos = DEMO_LATLON;
+  } else {
+    ui.statusMessage.textContent = "🗺 正在取得你的位置…(第一次會跳出詢問,請按「允許」)";
+    pos = await getPosition();
+    if (!pos) {
+      pushCommentary(
+        IN_APP
+          ? `🗺 ${IN_APP.n} 的內建瀏覽器拿不到定位——${IN_APP.m},或在設定裡選「🧪 台北測試地圖」。這次先走曠野牧場。`
+          : "🗺 這次拿不到定位(可能沒開權限或不是 https)——先走曠野牧場;想看地圖可改選「🧪 台北測試地圖」。",
+        "cool", null,
+      );
+      return;
+    }
+  }
+  const ok = await game.enableRealMap(pos.lat, pos.lon);
+  if (!ok) {
+    pushCommentary("🗺 地圖圖磚下載不到(沒網路?)——這次先走曠野牧場,遊戲照玩。", "cool", null);
+    return;
+  }
+  ui.mapCredit.hidden = false; // OSM 授權:地圖一上場就要標來源
+  pushCommentary(want === "demo"
+    ? "🗺 台北測試地圖!牧人和羊群走在真實街道上——羊散在附近幾百公尺,走過去找牠們。"
+    : "🗺 這是你家附近的真實地圖!羊散在附近幾百公尺的街上,像尋羊記那樣把牠們找回來。", "hot", null);
+}
+
+ui.startMatchButton.addEventListener("click", async () => {
   window.__matchT0 = Date.now();   // -done beacon 用:本局開始時間
   unlockAudio();
   audio.uiTap();
@@ -566,8 +662,9 @@ ui.startMatchButton.addEventListener("click", () => {
     modeId: selectedModeId,
     beastId: selectedBeastId,
   });
-  game.startSelectedMatch();
   closeHomeScreen();
+  await setupGroundForMatch();     // 地面要先決定好(真實地圖會改活動範圍與迷羊散佈)
+  game.startSelectedMatch();
 });
 
 function loadIntoUi() {

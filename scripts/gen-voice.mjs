@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rename
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
-import { voiceKey, PHRASES, SCRIPTURES } from "../src/voicePhrases.js";
+import { voiceKey, PHRASES, SCRIPTURES, BLEATS } from "../src/voicePhrases.js";
 
 // msedge-tts 內部的非同步清理會在我們搬走檔案後再 unlink 一次→吞掉這個特定錯誤,別讓它炸掉整批
 process.on("uncaughtException", (e) => {
@@ -29,6 +29,7 @@ const saveManifest = () => writeFileSync(manifestPath, JSON.stringify(manifest, 
 
 const NARRATOR = "zh-TW-YunJheNeural"; // 雲哲(男聲,旁白)
 const SCRIPTURE_VOICE = "zh-TW-HsiaoChenNeural"; // 曉臻(柔和女聲,經文)
+const BLEAT_VOICE = "zh-TW-HsiaoYuNeural"; // 曉雨(女童感)——🐑「羊要發出妹妹的叫聲」(0811 點名)
 
 let made = 0, skipped = 0, failed = 0;
 async function bake(text, voice) {
@@ -49,7 +50,7 @@ async function bake(text, voice) {
     manifest[key] = `voice/${file}`;
     saveManifest(); // 逐句落盤:中途死也不丟已完成的
     made++;
-    console.log("✓", voice === SCRIPTURE_VOICE ? "[經文]" : "[旁白]", text.slice(0, 30));
+    console.log("✓", voice === SCRIPTURE_VOICE ? "[經文]" : voice === BLEAT_VOICE ? "[羊叫]" : "[旁白]", text.slice(0, 30));
   } catch (err) {
     failed++;
     console.error("✗", text, String(err).slice(0, 120));
@@ -60,6 +61,7 @@ async function bake(text, voice) {
 
 for (const text of PHRASES) await bake(text, NARRATOR);
 for (const text of SCRIPTURES) await bake(text, SCRIPTURE_VOICE);
+for (const text of BLEATS) await bake(text, BLEAT_VOICE); // 🐑 妹妹的咩咩聲
 
 console.log(`done: made ${made}, skipped ${skipped}, failed ${failed}, total ${readdirSync(OUT).filter((f) => f.endsWith(".mp3")).length} mp3`);
 process.exit(failed ? 1 : 0); // 明確收尾(lib 的 WebSocket 會讓 process 掛著)

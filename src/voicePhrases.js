@@ -45,6 +45,11 @@ export const SCRIPTURES = [
   "你僕人為父親放羊,有時來了獅子,有時來了熊,從群中啣一隻羊羔去。(撒母耳記上十七章三十四節)",
 ];
 
+// 🐑 羊叫聲(0811 使用者點名「羊要發出妹妹的叫聲」)——曉雨(zh-TW-HsiaoYuNeural,女童感)
+// 唸「咩」的擬聲;播放時再依羊的體型調 playbackRate(小羊更高更奶聲)。
+// ⚠ 這幾句是**擬聲不是經文**,不進 SCRIPTURES;改字=hash 變=靜默(同 FLOCK_SCRIPTURES 鐵則)。
+export const BLEATS = ["咩~", "咩咩~", "咩──", "咩!"];
+
 // 🐑 尋羊經文(路加福音十五章,cuv 逐字查驗)——mp3 收割自 sheepquest/voice(同一位曉臻,
 // 逐字文本=當時烤製的唸稿,勿改字:改一個字 hash 就對不上=靜默)
 export const FLOCK_SCRIPTURES = {
