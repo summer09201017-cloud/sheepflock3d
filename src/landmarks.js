@@ -196,9 +196,15 @@ out center tags;`;
        而且失敗是靜默的 ⇒ 線上補查看起來「永遠找不到地標」,完全不會有人知道是超時。
        這是背景工作(fire-and-forget),等久一點不影響任何畫面。 */
     const t = setTimeout(() => ctl.abort(), 30000);
-    const r = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST", body: q, signal: ctl.signal,
-      headers: { "content-type": "text/plain;charset=UTF-8" },
+    /* ⚠⚠ 0812 修:原本用 POST ⇒ **線上從上線那天起就一直被 CORS 擋、從來沒成功過**。
+         overpass-api.de 對**跨來源的 POST 不回 `Access-Control-Allow-Origin`**;
+         而本機 `vite preview`(localhost)POST 是通的 ⇒ **本機驗收全綠、線上全死**。
+         再加上這族失敗刻意做成靜默的(catch → failed → 10 分鐘後再試),
+         症狀只是「線上補查永遠找不到地標」,沒有任何紅燈、沒有人會發現 ——
+         是 0812 做建築量體時同一個坑踩第二次才抓到的。
+         ⇒ 一律用 GET `?data=`(實測 200 / 712ms;查詢字串短,不會撞 URL 長度上限)。 */
+    const r = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {
+      method: "GET", signal: ctl.signal,
     });
     clearTimeout(t);
     if (r.ok) items = normalizeOverpass(await r.json());

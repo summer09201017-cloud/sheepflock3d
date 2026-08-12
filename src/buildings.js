@@ -115,25 +115,42 @@ async function fetchCell(lat, lon) {
   let items = [];
   let failed = false;
   try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), REQ_TIMEOUT);
-    const r = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST", body: q, signal: ctl.signal,
-      headers: { "content-type": "text/plain;charset=UTF-8" },
-    });
-    clearTimeout(t);
-    if (r.ok) {
-      const j = await r.json();
-      for (const el of j.elements || []) {
-        if (el.type !== "way" || !Array.isArray(el.geometry) || el.geometry.length < 4) continue;
-        // 精簡成 [高度, lat/lon 扁平陣列] —— 存原始 JSON 會把 localStorage 撐爆
-        const ring = [];
-        for (const p of el.geometry) ring.push(+p.lat.toFixed(6), +p.lon.toFixed(6));
-        items.push([Math.round(heightOf(el.tags) * 10) / 10, ring]);
+    /* ⚠⚠ **一定要用 GET `?data=`,不可以用 POST**(0812 線上實測):
+         overpass-api.de 對**跨來源的 POST 不回 `Access-Control-Allow-Origin`** ⇒ 瀏覽器擋死。
+         而本機 `vite preview`(localhost)POST 是通的 ⇒ **本機全綠、線上全死**,
+         加上這族失敗刻意是靜默的 ⇒ 沒有任何紅燈。landmarks.js 同一個坑(上線以來沒成功過)。
+
+       ⚠ 備援端點:Overpass 是**志工營運**的,過載時回 **504**,而 504 回應**不帶 CORS header**
+         ⇒ 瀏覽器只看得到 `net::ERR_FAILED`,看起來像我們的程式壞了(0812 為此繞了一大圈)。
+         ⇒ 依序試最多兩個端點就停(不是全部掃一遍——那是把別人的服務當自己的重試池)。 */
+    const ENDPOINTS = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+    ];
+    for (const ep of ENDPOINTS) {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), REQ_TIMEOUT);
+      try {
+        const r = await fetch(`${ep}?data=${encodeURIComponent(q)}`, { method: "GET", signal: ctl.signal });
+        clearTimeout(t);
+        if (!r.ok) { failed = true; continue; }   // 429/504 是「等一下再來」,不是「這裡沒有建築」
+        const j = await r.json();
+        for (const el of j.elements || []) {
+          if (el.type !== "way" || !Array.isArray(el.geometry) || el.geometry.length < 4) continue;
+          // 精簡成 [高度, lat/lon 扁平陣列] —— 存原始 JSON 會把 localStorage 撐爆
+          const ring = [];
+          for (const p of el.geometry) ring.push(+p.lat.toFixed(6), +p.lon.toFixed(6));
+          items.push([Math.round(heightOf(el.tags) * 10) / 10, ring]);
+        }
+        failed = false;
+        break;                                    // 拿到就走,不再打第二個端點
+      } catch {
+        clearTimeout(t);
+        failed = true;                            // 沒網路 / 超時 / 504 沒 CORS → 換下一個
       }
-    } else failed = true;   // 429/504/406 是「等一下再來」,不是「這裡沒有建築」
+    }
   } catch {
-    failed = true;          // 沒網路 / 超時 / 被擋 → 10 分鐘後再試
+    failed = true;
   } finally {
     inFlight = false;
   }

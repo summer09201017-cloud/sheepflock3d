@@ -27,7 +27,14 @@
 //                 ② 地面顏色強化(realmap.js LOOK):對比 1.34、飽和 1.62、亮度 0.88。
 //                 ③ 霧的起點 140→260(z18 一磚才 140m,原設定等於走出腳下那磚就被霧洗白);
 //                    far 維持 470 —— 那圈霧是刻意用來讓地圖邊界淡出的,不可以跟著推遠。
-const CACHE_NAME = "sheepflock3d-v8";
+// v10(2026-08-12):🔴🔴 修 SW 攔截跨來源請求 —— 這支 SW 從第一版就缺「只接管自己網域」那行,
+//                  跨域(圖磚 / Overpass)失敗時退到 caches.match("/") ⇒ **回 200 + 首頁 HTML**,
+//                  呼叫端拿 HTML 去 JSON.parse / 當圖片解析,而且 r.ok 是 true ⇒ 連失敗都判不出來。
+//                  這是建築量體「本機好好的、線上永遠空的」的真凶(v8/v9 都還沒修到)。
+// v9(2026-08-12):Overpass 一律改用 GET ?data=(跨來源 POST 不回 CORS header,線上一直被擋)。
+//                 ⚠ 連帶修好 landmarks.js 的線上地標補查 —— 它用 POST,**上線以來從沒成功過**,
+//                   而且失敗是靜默的(記 fail、10 分鐘後再試),沒有任何紅燈。
+const CACHE_NAME = "sheepflock3d-v12";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
@@ -46,6 +53,21 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  /* ⚠⚠ 0812:跨來源(CARTO 圖磚 / Overpass 建築與地標查詢)**由 SW 代打,但絕不 fallback**。
+     踩了兩層才問對問題,兩件事都要記住:
+     ① 原本跨域也走下面那段「快取優先 + 失敗退 caches.match('/')」⇒
+        **任何跨域失敗都變成「HTTP 200 + 我們自己的首頁 HTML」**;呼叫端拿 HTML 去 JSON.parse,
+        而且 `r.ok` 是 true ⇒ **連失敗都判斷不出來**,只會靜靜記成「這一帶沒有建築」。
+     ② 那就改成「跨域一律 return 放行給瀏覽器」吧?**實測不行** ——
+        線上用 `serviceWorkers:'block'` 開頁面直接 fetch Overpass 一樣 `Failed to fetch`,
+        而同一個查詢用 curl 帶 Origin 是 200 + `Access-Control-Allow-Origin: *`。
+        ⇒ 頁面直打被對方擋、**SW 代打反而通**(v8 那版誤打誤撞是這樣才成功的)。
+     ⇒ 結論:跨域交給 SW 用一句乾淨的 `fetch(request)` 代打,不快取、不退路、失敗就讓它失敗。 */
+  if (new URL(request.url).origin !== self.location.origin) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // HTML/導覽:網路優先(拿到就更新快取),離線才用快取——部署新版立即生效
   if (request.mode === "navigate" || request.destination === "document") {
@@ -75,3 +97,6 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+
+
+
