@@ -11,12 +11,13 @@
 //                 (實測手機直向 390×844:「出發!」在 1616px、頂端經文卡也被切一半)。
 //                 修:place-items: safe center + overflow-y:auto(只加 overflow 是修不好的,
 //                 被切掉的頂端在捲動範圍之外),再把「出發!」改 position:sticky 釘在底部。
-// v6(2026-08-12):🐑 羊叫聲重烤——使用者回報烤「咩」出來**聽起來是「捏」**。
-//                 「咩」=ㄇㄧㄝ,TTS 合成時 ㄇ 的鼻音配閉口韻 ㄧㄝ 聽感會滑成 ㄋㄧㄝ;
-//                 改唸「妹」(ㄇㄟˋ,開口大、聲母清楚)才是羊叫的 "meh~"。
-//                 ★ BLEATS 是**唸稿不是字幕**(voice.js 只拿它算 hash 取 mp3),
-//                   所以畫面文案仍寫「咩咩叫」、不跟著改。舊 4 支 mp3 已清孤兒。
-const CACHE_NAME = "sheepflock3d-v6";
+// v7(2026-08-12):🐑 羊叫聲**還原回「咩」**——使用者 A/B 試聽 8 個候選後拍板選 H(原本的)。
+//                 v6 改成的「妹」已撤回、4 支 mp3 連 manifest 條目清掉,語音回到 24 支。
+//                 ★ 為什麼一開始會覺得像「捏」:單獨聽原檔偏低偏慢;遊戲裡是加速播的
+//                   (playbackRate 1.16~1.42),那才是實際聽感 —— 試聽一定要用實際播放參數。
+//                 ★★ 教訓:語音只有使用者的耳朵能判斷,別憑推理改字;烤 A/B 候選讓他挑,一次定案。
+// v6(2026-08-12):(已撤回)羊叫聲「咩」→「妹」。
+const CACHE_NAME = "sheepflock3d-v7";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
