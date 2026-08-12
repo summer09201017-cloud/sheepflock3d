@@ -498,7 +498,15 @@ button.active {
   inset: 0;
   z-index: 8;
   display: grid;
-  place-items: center;
+  /* ⚠ 0812 修:原本是 place-items: center 且**沒有 overflow** ——
+     內容一超過一屏,grid 置中會把**上下兩端都切掉,而且捲不到**
+     (實測手機直向 390×844:「出發!」在 1616px,永遠按不到;頂端的經文卡也被切掉一半)。
+     `safe center` = 內容放得下就置中、放不下就從頂端開始排(不切頭),再配 overflow-y 才捲得到。
+     ★ 只寫 overflow-y 不改 place-items 是**修不好的**:被切掉的頂端在捲動範圍之外。 */
+  place-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 1rem;
   opacity: 0;
   pointer-events: none;
@@ -640,6 +648,18 @@ button.active {
 
 .home-actions {
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+  /* 🐑 0812 修:「出發!」釘在畫面底部,捲到哪都按得到。
+     由來=使用者回報「首頁選單太長,開始遊戲的按鈕太下面看不到了」。
+     光是讓它可捲還不夠——選單有兩張大卡(4 個模式 + 5 個下拉),
+     手機直向要捲快兩屏才看得到按鈕,孩子會以為這遊戲不能玩。 */
+  position: sticky;
+  bottom: -0.35rem;
+  z-index: 3;
+  /* 底部漸層讓按鈕和捲動中的內容分得開(不是純色塊,免得看起來像斷掉) */
+  padding: 0.7rem 0.35rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  margin: 0 -0.35rem -0.35rem;
+  background: linear-gradient(180deg, rgba(6, 14, 22, 0) 0%, rgba(6, 14, 22, 0.82) 26%, rgba(6, 14, 22, 0.96) 100%);
+  border-radius: 0 0 1.2rem 1.2rem;
 }
 
 @keyframes board-enter {

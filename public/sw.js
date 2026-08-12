@@ -5,7 +5,13 @@
 //                 + 🗺 **真實地標任務**(走進真的公園/學校 → 那裡有一隻唱詩的羊;預烤台北地標包
 //                 + 走出範圍才線上補查、結果只存在本機)。順修:saveSettings 會把沒帶到的鍵打回預設
 //                 ⇒「牧場漫遊的地面」每次出發都被洗回曠野。
-const CACHE_NAME = "sheepflock3d-v4";
+// v5(2026-08-12):🔴 修「首頁選單捲不動、『出發!』按不到」——使用者回報「開始遊戲的按鈕太下面看不到」。
+//                 真因不是太長:.home-screen 是 position:absolute + place-items:center 但**沒有 overflow**
+//                 ⇒ 內容超過一屏時 grid 置中把**上下兩端都切掉,而且捲不到**
+//                 (實測手機直向 390×844:「出發!」在 1616px、頂端經文卡也被切一半)。
+//                 修:place-items: safe center + overflow-y:auto(只加 overflow 是修不好的,
+//                 被切掉的頂端在捲動範圍之外),再把「出發!」改 position:sticky 釘在底部。
+const CACHE_NAME = "sheepflock3d-v5";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
