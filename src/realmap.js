@@ -14,6 +14,19 @@ export const TILE_Z = 18;          // 縮放層級:z18 一磚≈140 公尺(看�
 const TILE_PX = 256;
 const SUBS = ["a", "b", "c", "d"];
 
+/* 🎨 0812 使用者回報:「地上幾乎全白,看不清楚線與字」。三層原因疊在一起,不是單一個:
+     ① CARTO Voyager 本來就是**淺色底圖**(給白背景網頁用的,不是給 3D 場景當地面)
+     ② 場景用 ACESFilmic tone mapping + exposure 1.08 ⇒ 亮部再被提亮
+     ③ realmap 模式的霧 near=140(z18 一磚才 140m)⇒ 一磚以外就開始被霧洗白
+   ⇒ 在**地面材質**上做顏色強化(不動全場 tone mapping,免得人物與天空跟著變),
+     再把霧往後推。配色參考尋羊記 pastelize():它好看的關鍵不是「更亮」,是**顏色分區明確**。
+   ⚠ 這幾個數字是看著截圖調的,要再調就改這裡一處(三個磚材質共用同一段 shader)。*/
+const LOOK = {
+  contrast: 1.34,    // 對比:把路網/文字從白底裡拉出來
+  saturation: 1.62,  // 飽和:綠地、水、道路各自的顏色分得開(尋羊記的做法)
+  brightness: 0.88,  // 整體壓暗一點,抵銷 tone mapping 的提亮
+};
+
 // 公尺/像素(Web Mercator;隨緯度變化——台灣約 0.54,赤道約 0.6)
 export function metersPerPixel(lat, z = TILE_Z) {
   return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, z);
@@ -67,6 +80,22 @@ export async function createRealMap(scene, { lat, lon, radius = 2, z = TILE_Z } 
     const cx = (tx * TILE_PX + TILE_PX / 2 - originPx) * mpp;
     const cz = (ty * TILE_PX + TILE_PX / 2 - originPy) * mpp;
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+    /* 🎨 對比/飽和強化(見檔頭 LOOK):注入在 fog 之前 —— 順序很重要,
+       要先把圖磚本身的顏色拉出來,再讓霧照常吃它,不然遠處會出現「顏色比近處還鮮」的怪畫面。 */
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <fog_fragment>",
+        `{
+           vec3 mc = gl_FragColor.rgb;
+           mc = (mc - 0.5) * ${LOOK.contrast.toFixed(3)} + 0.5;
+           float ml = dot(mc, vec3(0.2126, 0.7152, 0.0722));
+           mc = mix(vec3(ml), mc, ${LOOK.saturation.toFixed(3)});
+           mc *= ${LOOK.brightness.toFixed(3)};
+           gl_FragColor.rgb = clamp(mc, 0.0, 1.0);
+         }
+         #include <fog_fragment>`,
+      );
+    };
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(cx, 0.01, cz); // 抬 1cm:壓在草地之上,免得 z-fighting 閃爍

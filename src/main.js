@@ -686,7 +686,9 @@ ui.audioSelect.addEventListener("change", (event) => {
      ② LINE/FB 內建瀏覽器(WebView)的定位常年拿不到 ⇒ 明講怎麼換瀏覽器,並留「測試地圖」出口。
      ③ 非 https 一律拿不到定位(瀏覽器規定)——直接說,不要讓使用者乾等。
    拿不到座標 = 回 null,呼叫端退回曠野牧場,遊戲照玩。 */
-const DEMO_LATLON = { lat: 25.0330, lon: 121.5654 }; // 台北車站(同尋羊記的客廳測試起點)
+// ⚠ 0812 更正:這個座標其實在**信義區**(松智路/信義路五段口,台北 101 旁),不是台北車站——
+//   原註解寫錯了,實際俯視驗證時才發現。街廓密、樓多,拿來測「真實地圖+建築」剛好。
+const DEMO_LATLON = { lat: 25.0330, lon: 121.5654 }; // 台北信義區(同尋羊記的客廳測試起點)
 
 function getPosition(timeoutMs = 9000) {
   return new Promise((resolve) => {

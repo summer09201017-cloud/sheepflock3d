@@ -1368,13 +1368,34 @@ export class WarriorGame {
       this.scene.add(this.mapBase);
     }
     this.mapBase.visible = true;
-    this.scene.fog = new THREE.Fog(0xcfe2f2, 90, 320);  // 遠一點才看得到街廓,不然一片霧
+    // 🗺 0812:進場那一刻的霧也要跟 update 一致(原 90/320 太近,街道一出腳下磚就糊)
+    this.scene.fog = new THREE.Fog(0xcfe2f2, 260, 470);  // near 遠一點才看得清街廓;far 留著讓地圖邊界淡出
     this.camera.far = 700;
     this.camera.updateProjectionMatrix();
+
+    /* 🏙 真實建築量體(0812 使用者:「也沒有高樓大廈」「尋羊記裡的高樓…可以參考」)。
+       ★ 刻意**不 await**:Overpass 實測 1.3~3.7 秒,擋在這裡等於按下「出發」要多等三秒
+         (0811 已經為了「只等腳下一塊」把開場從 7~9 秒壓到 0.9 秒,不能又加回去)。
+         建築晚幾秒浮出來完全可以接受 —— 它是加分,不是玩法。
+       ★ 失敗一律靜默:沒網路/Overpass 忙 → 就是沒有建築,遊戲照玩(同離線鐵則)。 */
+    import("./buildings.js")
+      .then(({ createBuildings }) => createBuildings(this.scene, {
+        lat, lon,
+        latLonToWorld: map.latLonToWorld,
+        enabled: this.settings?.landmarksOnline !== false,   // 沿用「不連外查」那個開關,不另開一個
+      }))
+      .then((b) => {
+        if (!b) return;
+        if (!this.realMap) { b.dispose(); return; }          // 已經離開真實地圖模式了(使用者手快)
+        this.buildings = b;
+      })
+      .catch(() => { /* 建築是加分,失敗不吭聲 */ });
+
     return true;
   }
 
   disableRealMap() {
+    if (this.buildings) { this.buildings.dispose(); this.buildings = null; }
     if (this.realMap) { this.realMap.dispose(); this.realMap = null; }
     if (this.mapBase) this.mapBase.visible = false;
     this.bound = ARENA_HALF;
@@ -2079,8 +2100,14 @@ export class WarriorGame {
     const gust = Math.max(0, Math.min(1, (Math.sin(this.time * 0.12) - 0.55) / 0.45));
     if (this.scene.fog) {
       this.scene.fog.color.copy(ca);
-      this.scene.fog.near = rm ? 140 - 40 * gust : 55 - 30 * gust;
-      this.scene.fog.far = rm ? 460 - 120 * gust : 150 - 76 * gust;
+      /* 🗺 0812:真實地圖模式**只把霧的起點往後推**(near 140 → 260),far 維持 460。
+         使用者回報「地上幾乎全白」的第三層原因就是 near:z18 一磚才 140 公尺,
+         near=140 等於**走出腳下那一磚,街道就開始被霧洗白** ⇒ 看不清線與字。
+         ⚠ far **不可以跟著推遠**:地圖只有 5×5 磚(對角≈495m),那圈霧是**刻意用來
+           讓地圖邊界淡出**的;推遠會露出「地圖突然結束」的硬邊。
+         ⚠ 曠野模式維持原值不動(那裡的霧另有收邊作用)。*/
+      this.scene.fog.near = rm ? 260 - 60 * gust : 55 - 30 * gust;
+      this.scene.fog.far = rm ? 470 - 110 * gust : 150 - 76 * gust;
     }
     if (this.snowFx) {
       const attr = this.snowFx.pts.geometry.getAttribute("position");

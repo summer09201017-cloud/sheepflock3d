@@ -17,7 +17,17 @@
 //                   (playbackRate 1.16~1.42),那才是實際聽感 —— 試聽一定要用實際播放參數。
 //                 ★★ 教訓:語音只有使用者的耳朵能判斷,別憑推理改字;烤 A/B 候選讓他挑,一次定案。
 // v6(2026-08-12):(已撤回)羊叫聲「咩」→「妹」。
-const CACHE_NAME = "sheepflock3d-v7";
+// v8(2026-08-12):🏙 真實地圖模式**加上真實建築量體** + 地面看得清楚
+//                 (使用者:「地上幾乎全白,看不清楚線與字,也沒有高樓大廈」
+//                  「尋羊記裡的高樓與地圖,滿不錯的,你可以參考」)。
+//                 ① 新 src/buildings.js:Overpass 抓真實建築輪廓 → extrude 成量體,
+//                    高度取 height / building:levels×3.3(預設 9m、上限 180m),配色學尋羊記 pastelize。
+//                    ★ 不 await:背景載入,不讓開場多等 1.3~3.7 秒(0811 才把開場壓到 0.9 秒)。
+//                    ★ 五道閘(同 landmarks):開場查一次/間隔 20s/每天 12 次/快取 30 天/最多 12 格。
+//                 ② 地面顏色強化(realmap.js LOOK):對比 1.34、飽和 1.62、亮度 0.88。
+//                 ③ 霧的起點 140→260(z18 一磚才 140m,原設定等於走出腳下那磚就被霧洗白);
+//                    far 維持 470 —— 那圈霧是刻意用來讓地圖邊界淡出的,不可以跟著推遠。
+const CACHE_NAME = "sheepflock3d-v8";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
