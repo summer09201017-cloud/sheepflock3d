@@ -1404,6 +1404,8 @@ export class WarriorGame {
   }
 
   disableRealMap() {
+    this._bAnnounced = false;
+    this._poiAnnounced = false;
     if (this.poiMarkers) { this.poiMarkers.dispose(); this.poiMarkers = null; }
     if (this.buildings) { this.buildings.dispose(); this.buildings = null; }
     if (this.realMap) { this.realMap.dispose(); this.realMap = null; }
@@ -1545,6 +1547,16 @@ export class WarriorGame {
     // 0817 走到哪補到哪:建築走進新格才抓(內建五道禮貌閘);招牌純本機、只是重掃快取
     if (online && this.buildings?.update) this.buildings.update(here.lat, here.lon);
     if (this.poiMarkers?.update) this.poiMarkers.update(here.lat, here.lon);
+    // 第一批到貨時吭一聲——「正在向志工伺服器排隊(9~12 秒)」和「壞了」在畫面上長一樣,
+    // 不吭聲使用者只會覺得「都看不到」(0817 實際回報)。
+    if (!this._bAnnounced && this.buildings && this.buildings.count > 0) {
+      this._bAnnounced = true;
+      this.message = `🏙 附近的建築上好了(${this.buildings.count} 棟)。`;
+    }
+    if (!this._poiAnnounced && this.poiMarkers && this.poiMarkers.count > 0) {
+      this._poiAnnounced = true;
+      this.message = `🪧 附近有 ${this.poiMarkers.count} 面地標招牌(學校/公園/商店,拉遠更好認)。`;
+    }
 
     if (this.lost || this.holdRoam) return;              // 已經有一隻羊在等他找了,不要同時兩隻
     const lm = findLandmarkAt(here.lat, here.lon);
@@ -2012,9 +2024,9 @@ export class WarriorGame {
   /** 鏡頭拉近/拉遠。factor>1=拉遠(看得更廣),<1=拉近。滾輪/雙指/按鈕共用這一支 */
   adjustZoom(factor) {
     const prev = this.camZoom;
-    this.camZoom = clamp(this.camZoom * factor, 0.6, 2.4);
+    this.camZoom = clamp(this.camZoom * factor, 0.6, 4.0); // 0817 使用者:「讓我能再拉遠一些」2.4→4.0
     if (this.camZoom === prev) return;
-    const tag = this.camZoom >= 2.39 ? "(最遠)" : this.camZoom <= 0.61 ? "(最近)" : "";
+    const tag = this.camZoom >= 3.99 ? "(最遠)" : this.camZoom <= 0.61 ? "(最近)" : "";
     this.message = `鏡頭距離 ${Math.round(this.camZoom * 100)}%${tag}。`;
   }
 
