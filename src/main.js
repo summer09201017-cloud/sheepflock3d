@@ -789,6 +789,47 @@ ui.cameraButton.addEventListener("click", () => {
   game.cycleCameraView();
 });
 
+// ── 鏡頭縮放:側欄按鈕 + 滑鼠滾輪 + 手機雙指捏合(三路共用 game.adjustZoom)
+document.querySelector("#zoomOutButton")?.addEventListener("click", () => game.adjustZoom(1.25));
+document.querySelector("#zoomInButton")?.addEventListener("click", () => game.adjustZoom(1 / 1.25));
+
+ui.canvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault(); // 別讓頁面跟著捲
+    game.adjustZoom(e.deltaY > 0 ? 1.12 : 1 / 1.12);
+  },
+  { passive: false },
+);
+
+// 雙指捏合:兩指距離變短=拉遠(看更多),變長=拉近——跟地圖 App 同方向
+{
+  const pinchPts = new Map();
+  let pinchDist = 0;
+  const dist = () => {
+    const [a, b] = [...pinchPts.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  ui.canvas.addEventListener("pointerdown", (e) => {
+    pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPts.size === 2) pinchDist = dist();
+  });
+  ui.canvas.addEventListener("pointermove", (e) => {
+    if (!pinchPts.has(e.pointerId)) return;
+    pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPts.size !== 2) return;
+    const d = dist();
+    if (pinchDist > 0 && d > 0) game.adjustZoom(pinchDist / d);
+    pinchDist = d;
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) {
+    ui.canvas.addEventListener(ev, (e) => {
+      pinchPts.delete(e.pointerId);
+      pinchDist = 0;
+    });
+  }
+}
+
 ui.audioButton.addEventListener("click", () => {
   unlockAudio();
   audio.uiTap();

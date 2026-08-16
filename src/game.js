@@ -936,6 +936,8 @@ export class WarriorGame {
     this.phase = "menu"; // menu | gate | battle | ended
     this.message = "在首頁選擇模式、野獸陣容與難度後開始。";
     this.cameraView = 0;
+    // 鏡頭縮放倍率:1=標準;愈大機位離注視點愈遠=一眼看到更多地圖與羊(0816 使用者需求)
+    this.camZoom = 1;
     this.autoSaveTimer = 0;
 
     this.roundNo = 0;
@@ -1996,6 +1998,15 @@ export class WarriorGame {
     this.pushHud();
   }
 
+  /** 鏡頭拉近/拉遠。factor>1=拉遠(看得更廣),<1=拉近。滾輪/雙指/按鈕共用這一支 */
+  adjustZoom(factor) {
+    const prev = this.camZoom;
+    this.camZoom = clamp(this.camZoom * factor, 0.6, 2.4);
+    if (this.camZoom === prev) return;
+    const tag = this.camZoom >= 2.39 ? "(最遠)" : this.camZoom <= 0.61 ? "(最近)" : "";
+    this.message = `鏡頭距離 ${Math.round(this.camZoom * 100)}%${tag}。`;
+  }
+
   // ---------- 主迴圈 ----------
   start() {
     if (this.running) return;
@@ -2522,6 +2533,8 @@ export class WarriorGame {
 
   handleKeys() {
     if (this.input.consumePress("camera")) this.cycleCameraView();
+    if (this.input.consumePress("zoomOut")) this.adjustZoom(1.25);
+    if (this.input.consumePress("zoomIn")) this.adjustZoom(1 / 1.25);
     if (this.input.consumePress("pause")) this.togglePause();
     if (this.input.consumeRelease("heavyAttack")) this._heavyRelease();
     if (this.overlay.visible) return;
@@ -2750,6 +2763,14 @@ export class WarriorGame {
       const fwd = new THREE.Vector3(Math.sin(this.my.heading), 0, Math.cos(this.my.heading));
       desiredPos = this.my.pos.clone().addScaledVector(fwd, 0.3).setY(2.0);
       desiredLook = this.my.pos.clone().addScaledVector(fwd, 10).setY(1.3);
+    }
+    // 縮放:把「機位相對注視點的偏移」按倍率縮放——五種視角同一套公式,
+    // 高空俯瞰 zoom out 會自動拉更高。主選單環繞鏡頭與第一人稱(眼睛就在頭上)不縮。
+    if (this.phase !== "menu" && this.cameraView !== 4 && this.camZoom !== 1) {
+      desiredPos = desiredLook
+        .clone()
+        .addScaledVector(desiredPos.clone().sub(desiredLook), this.camZoom);
+      if (desiredPos.y < 1.2) desiredPos.y = 1.2; // 拉太近也不鑽進地面
     }
     const k = 1 - Math.exp(-delta * (this.hitCamT < 0.55 && this.phase !== "menu" ? 6.5 : 3.4));
     this.camPos.lerp(desiredPos, k);

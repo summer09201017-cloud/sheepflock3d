@@ -1,7 +1,20 @@
 ============================================================
 牧羊人與羊群 3D(sheepflock3d)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-08-11(agape250 機・Fable 5) · 給「另一台 PC / 下一手 AI」接手用
+更新:2026-08-17(HFP 機・Fable 5) · 給「另一台 PC / 下一手 AI」接手用
 ============================================================
+
+■ 2026-08-17(HFP 機):🔍 鏡頭縮放(zoom in/out)上線 ✅
+  使用者需求:人物與羊太大,zoom out 想一眼看到更多地圖與羊。
+  - 核心=game.js `camZoom`(0.6~2.4,預設 1)+ adjustZoom(factor);updateCamera 在 lerp 前
+    把「機位相對注視點的偏移」乘上倍率——五種視角同一套公式,俯瞰 zoom out 自動拉更高
+    (實測 y30→71)。主選單環繞鏡頭與第一人稱(view 4)刻意不縮;拉太近 y 夾 1.2 不鑽地。
+  - 三路輸入:①側欄/手機觸控列 🔍＋－鈕(data-action 自動綁,handleKeys consumePress)
+    ②滑鼠滾輪(canvas wheel,preventDefault)③手機雙指捏合(pointer 兩指距離,
+    指距變短=拉遠,與地圖 App 同方向)。狀態列會報「鏡頭距離 N%(最遠/最近)」。
+  - 驗證雷:Playwright 分頁被瀏覽器節流 → rAF 慢跑、lerp 看起來沒收斂,會誤判 zoom 沒效;
+    正解=在 evaluate 裡連呼 g.updateCamera(0.1)×80 同步收斂再量。
+    實測:跟隨 6.0→21.6→2.4;俯瞰 y 30→71.3;第一人稱不受影響。
+  - SW v12→v13;CF Pages 手動部署(wrangler pages deploy dist)。
 
 ★ 這是什麼
   聖經主題 3D 遊戲:尋羊(路加福音十五章)+ 集羊(約翰福音十章三節「按著名叫自己的羊」)
