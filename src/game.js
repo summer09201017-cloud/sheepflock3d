@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { InputManager } from "./input.js";
 import { loadSettings, saveSettings, loadSavedGame, saveGameState } from "./storage.js";
 import { makeGeneSheep, randomGenes, loadDex } from "./flock.js";
-import { findLandmarkAt, topUpLandmarks, landmarkClaimed, claimLandmark, landmarkMeta } from "./landmarks.js";
+import { findLandmarkAt, topUpLandmarks, landmarkClaimed, claimLandmark, landmarkMeta, createPoiMarkers } from "./landmarks.js";
 
 // —— 牧羊人與羊群(sheepflock3d)——2026-08-11 換皮自 davidbeasts3d(3D 大衛打獅熊・護羊之戰)。
 // 新增:🐑 羊群系統(src/flock.js)——牧場漫遊尋回迷羊(路15:4-6)、每隻羊基因長相不同、
@@ -1393,10 +1393,18 @@ export class WarriorGame {
       })
       .catch(() => { /* 建築是加分,失敗不吭聲 */ });
 
+    /* 🪧 地標招牌(0817):公園/學校/超市/便利店在畫面上看得見、認得出。
+       純本機渲染(讀預烤包+快取),失敗就是沒有,不影響玩法。 */
+    try {
+      this.poiMarkers = createPoiMarkers(this.scene, { latLonToWorld: map.latLonToWorld });
+      this.poiMarkers?.update(lat, lon);
+    } catch { this.poiMarkers = null; }
+
     return true;
   }
 
   disableRealMap() {
+    if (this.poiMarkers) { this.poiMarkers.dispose(); this.poiMarkers = null; }
     if (this.buildings) { this.buildings.dispose(); this.buildings = null; }
     if (this.realMap) { this.realMap.dispose(); this.realMap = null; }
     if (this.mapBase) this.mapBase.visible = false;
@@ -1534,6 +1542,9 @@ export class WarriorGame {
     //    而這裡 1.2 秒才跑一次,完全不是熱路徑。
     const online = loadSettings().landmarksOnline !== false;
     topUpLandmarks(here.lat, here.lon, { enabled: online }).catch(() => {});
+    // 0817 走到哪補到哪:建築走進新格才抓(內建五道禮貌閘);招牌純本機、只是重掃快取
+    if (online && this.buildings?.update) this.buildings.update(here.lat, here.lon);
+    if (this.poiMarkers?.update) this.poiMarkers.update(here.lat, here.lon);
 
     if (this.lost || this.holdRoam) return;              // 已經有一隻羊在等他找了,不要同時兩隻
     const lm = findLandmarkAt(here.lat, here.lon);

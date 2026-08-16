@@ -118,8 +118,50 @@ export function makeGeneSheep(genes) {
     core.position.set(-0.12, 0.88, 0.5);
     group.add(core);
   }
+  // 🚻 公母一眼認(0817 使用者:「花=母、太陽眼鏡=公、裙子幫助識別」)。
+  // sex **刻意不進跨站基因格式**(sheepdex.js 是共用複本不能就地改)——
+  // 由既有基因做穩定雜湊推導:同一隻羊每次都同性別、舊圖鑑的羊也有、兩站不漂移。
+  if (sheepSexOf(g) === "f") {
+    // 母:頭頂花冠(與 song 天賦的側花錯開位置)+ 粉紅小裙
+    const petalMat = new THREE.MeshStandardMaterial({ color: 0xf27fb2, roughness: 0.85 });
+    for (let i = 0; i < 5; i += 1) {
+      const a = (i / 5) * Math.PI * 2;
+      const petal = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), petalMat);
+      petal.position.set(Math.cos(a) * 0.06, 0.92, 0.56 + Math.sin(a) * 0.06);
+      group.add(petal);
+    }
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 6), new THREE.MeshStandardMaterial({ color: 0xf2d13c }));
+    core.position.set(0, 0.945, 0.56);
+    group.add(core);
+    const skirt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.36, 0.56, 0.2, 14, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xf5a3c7, roughness: 0.9, side: THREE.DoubleSide }),
+    );
+    skirt.scale.z = 1.25;
+    skirt.position.y = 0.34;
+    group.add(skirt);
+  } else {
+    // 公:太陽眼鏡(蓋在水潤大眼上,一眼認出)
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.25, metalness: 0.35 });
+    for (const sx of [-1, 1]) {
+      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.078, 0.02), lensMat);
+      lens.position.set(sx * 0.085, 0.745, 0.778);
+      group.add(lens);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.016, 0.018), lensMat);
+    bridge.position.set(0, 0.755, 0.778);
+    group.add(bridge);
+  }
   group.scale.setScalar(g.size);
   return { group, legs, body };
+}
+
+/** 由既有基因推導穩定性別:'f' 或 'm'。不吃亂數、不改存檔,同基因永遠同答案 */
+export function sheepSexOf(g) {
+  const s = `${g.wool}|${g.face}|${g.ears}|${g.eyes}|${g.spots}|${g.gift}|${g.size}`;
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h & 1) === 1 ? "f" : "m";
 }
 
 // ---------- 🐑 3D 動態頭像(0811 使用者點名「圖鑑的羊要像皮克敏一樣 3D 會動」) ----------

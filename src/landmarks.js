@@ -44,8 +44,15 @@ const KIND_META = {
   pitch: { icon: "⚽", label: "球場" },
   square: { icon: "🏛", label: "廣場" },
   school: { icon: "🏫", label: "學校" },
+  // 0817 使用者點名「看不到附近的愛買、全家」:商店三類(超市/便利店/百貨)
+  super: { icon: "🛒", label: "超市" },
+  store: { icon: "🏪", label: "便利商店" },
+  mall: { icon: "🏬", label: "百貨" },
 };
-const DEFAULT_R = { park: 70, garden: 55, playground: 35, pitch: 45, square: 45, school: 80 };
+const DEFAULT_R = {
+  park: 70, garden: 55, playground: 35, pitch: 45, square: 45, school: 80,
+  super: 45, store: 25, mall: 60,
+};
 
 /* ---------- 小工具 ---------- */
 function readJson(key, fallback) {
@@ -80,11 +87,12 @@ export function landmarkMeta(kind) {
 /* ---------- 快取 ---------- */
 function loadCache() {
   const c = readJson(CACHE_KEY, null);
-  if (c && c.v === 1 && c.cells && typeof c.cells === "object") {
+  // v2(0817):查詢加了商店三類——舊格快取(30 天)裡沒有商店,不重抓就永遠看不到愛買/全家
+  if (c && c.v === 2 && c.cells && typeof c.cells === "object") {
     c.meta = c.meta || {};
     return c;
   }
-  return { v: 1, cells: {}, meta: {} };
+  return { v: 2, cells: {}, meta: {} };
 }
 function saveCache(c) {
   // 滿了丟最舊的(依 at 排序)
@@ -178,6 +186,7 @@ export async function topUpLandmarks(lat, lon, { enabled = true } = {}) {
   nwr["leisure"~"^(park|garden|playground|pitch|track)$"](around:900,${p.lat.toFixed(4)},${p.lon.toFixed(4)});
   nwr["amenity"~"^(school|college|university)$"](around:900,${p.lat.toFixed(4)},${p.lon.toFixed(4)});
   nwr["place"="square"](around:900,${p.lat.toFixed(4)},${p.lon.toFixed(4)});
+  nwr["shop"~"^(supermarket|convenience|mall|department_store)$"](around:900,${p.lat.toFixed(4)},${p.lon.toFixed(4)});
 );
 out center tags;`;
 
@@ -232,6 +241,10 @@ const NAME_OK = {
   pitch: /(球場|操場|運動場|棒球|籃球|網球|田徑|足球)/,
   square: /(廣場)/,
   school: /(國小|國中|高中|高職|國民小學|國民中學|高級中學|實驗小學|附小|附中|大學|學院|專科|校區|學校)/,
+  // 商店:shop=supermarket/convenience 這種標籤本身已經夠明確,名字不設關卡(有名字就收)
+  super: /./,
+  store: /./,
+  mall: /./,
 };
 function kindOf(t) {
   if (t.leisure === "park") return "park";
@@ -240,6 +253,9 @@ function kindOf(t) {
   if (t.leisure === "pitch" || t.leisure === "track") return "pitch";
   if (t.place === "square") return "square";
   if (t.amenity === "school" || t.amenity === "college" || t.amenity === "university") return "school";
+  if (t.shop === "supermarket") return "super";
+  if (t.shop === "convenience") return "store";
+  if (t.shop === "mall" || t.shop === "department_store") return "mall";
   return null;
 }
 /* 與 scripts/gen-landmarks.mjs 同一套清理與過濾(名字唸不出來是什麼地方的就不要)。
@@ -286,3 +302,117 @@ export function claimLandmark(lm) {
 }
 
 export const packInfo = () => ({ count: (PACK.items || []).length, center: PACK.center });
+
+/* ---------- 🪧 看得見的地標招牌(0817 使用者:「看不到附近的學校、公園、愛買、全家」) ----------
+   之前地標只拿來當「失羊出沒點」,畫面上沒有任何可辨識的標記——資料在、眼睛看不到。
+   這裡把玩家附近 700m 內的地標畫成:彩色光柱 + emoji＋名字招牌(billboard sprite)。
+   純本機渲染:資料全部來自預烤包與已快取的格子,**不發任何網路請求**;上限 40 面招牌。 */
+import * as THREE from "three";
+
+const MARKER_COLORS = {
+  park: 0x58c06a, garden: 0xe07ad0, playground: 0xf2a03d, pitch: 0x4db6e2,
+  square: 0xb9a06a, school: 0x5f7de8, super: 0xf2c94c, store: 0xff8a5c, mall: 0xc084fc,
+};
+
+export function createPoiMarkers(scene, { latLonToWorld } = {}) {
+  if (!scene || !latLonToWorld) return null;
+  const group = new THREE.Group();
+  group.name = "poiMarkers";
+  scene.add(group);
+  const shown = new Map(); // id → { beam, sprite, tex }
+  let lastAt = 0;
+  const idOf = (it) => `${it.k}|${it.n}|${it.lat.toFixed(3)}|${it.lon.toFixed(3)}`;
+
+  function makeSign(meta, name) {
+    const cv = document.createElement("canvas");
+    cv.width = 512;
+    cv.height = 176;
+    const g = cv.getContext("2d");
+    const r = 36;
+    g.fillStyle = "rgba(15,23,42,0.78)";
+    g.beginPath();
+    g.moveTo(r, 0); g.lineTo(512 - r, 0); g.quadraticCurveTo(512, 0, 512, r);
+    g.lineTo(512, 176 - r); g.quadraticCurveTo(512, 176, 512 - r, 176);
+    g.lineTo(r, 176); g.quadraticCurveTo(0, 176, 0, 176 - r);
+    g.lineTo(0, r); g.quadraticCurveTo(0, 0, r, 0);
+    g.fill();
+    g.textBaseline = "middle";
+    g.font = "88px sans-serif";
+    g.fillText(meta.icon, 22, 96);
+    g.fillStyle = "#fff";
+    g.font = "bold 52px sans-serif";
+    const label = name.length > 8 ? name.slice(0, 8) + "…" : name;
+    g.fillText(label, 132, 92);
+    const tex = new THREE.CanvasTexture(cv);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(9, 3.1, 1);
+    sprite.renderOrder = 999; // 穿透建築也看得到——招牌就是要指路的
+    return { sprite, tex };
+  }
+
+  function add(it) {
+    const meta = KIND_META[it.k] || { icon: "📍", label: "地標" };
+    const w = latLonToWorld(it.lat, it.lon);
+    const h = it.k === "store" || it.k === "super" || it.k === "mall" ? 10 : 14;
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.45, h, 8, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: MARKER_COLORS[it.k] || 0xffe89a,
+        transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false,
+      }),
+    );
+    beam.position.set(w.x, h / 2, w.z);
+    const { sprite, tex } = makeSign(meta, it.n);
+    sprite.position.set(w.x, h + 1.8, w.z);
+    group.add(beam);
+    group.add(sprite);
+    shown.set(idOf(it), { beam, sprite, tex });
+  }
+
+  function remove(id) {
+    const m = shown.get(id);
+    if (!m) return;
+    group.remove(m.beam);
+    group.remove(m.sprite);
+    m.beam.geometry.dispose();
+    m.beam.material.dispose();
+    m.tex.dispose();
+    m.sprite.material.dispose();
+    shown.delete(id);
+  }
+
+  return {
+    group,
+    get count() { return shown.size; },
+    update(lat, lon) {
+      const now = Date.now();
+      if (now - lastAt < 2500) return;
+      lastAt = now;
+      // 收集附近地標:預烤包 + 已快取格子,同名同座標(粗到 ~100m)只留最近的一筆
+      const near = new Map(); // dedupKey → { it, d }
+      const consider = (it) => {
+        const d = distM(lat, lon, it.lat, it.lon);
+        if (d > 700) return;
+        const key = `${it.n}|${it.lat.toFixed(3)}|${it.lon.toFixed(3)}`;
+        const cur = near.get(key);
+        if (!cur || d < cur.d) near.set(key, { it, d });
+      };
+      for (const it of PACK.items || []) consider(it);
+      const cache = loadCache();
+      for (const k in cache.cells) for (const it of cache.cells[k].items || []) consider(it);
+      const list = [...near.values()].sort((a, b) => a.d - b.d).slice(0, 40);
+      const keep = new Set();
+      for (const { it } of list) {
+        const id = idOf(it);
+        keep.add(id);
+        if (!shown.has(id)) add(it);
+      }
+      for (const id of [...shown.keys()]) if (!keep.has(id)) remove(id);
+    },
+    dispose() {
+      for (const id of [...shown.keys()]) remove(id);
+      scene.remove(group);
+    },
+  };
+}

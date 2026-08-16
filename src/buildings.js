@@ -251,29 +251,61 @@ function mergeGeometries(geos) {
  * 失敗一律回 null —— 建築是**加分**,沒有它牧場漫遊照樣完整(同 landmarks 的降級鐵則)。
  * @returns {Promise<{group:THREE.Group, count:number, dispose:()=>void}|null>}
  */
+/* 0817 使用者:「看不到附近的高樓大廈」——舊版只在開場抓**出生那一格**(400m),
+   走出去世界就變平的。改成逐格管理器:1.2 秒判位那條線每次餵目前位置進來,
+   走進新格才抓(fetchCell 的五道禮貌閘全部原封不動:20 秒間隔/每日 12 次/快取 TTL/同時一個),
+   已快取的格子走回來**零網路**直接重建。 */
 export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled = true } = {}) {
   if (!enabled || !latLonToWorld) return null;
-  let items = [];
-  try {
-    items = await fetchCell(lat, lon);
-  } catch { return null; }
-  if (!items || !items.length) return null;
-
-  const mesh = buildMesh(items, latLonToWorld);
-  if (!mesh) return null;
 
   const group = new THREE.Group();
   group.name = "realBuildings";
-  group.add(mesh);
   scene.add(group);
+
+  const cellMeshes = new Map(); // cellKey → mesh
+  const pending = new Set();    // 正在抓的格子(同格併發只跑一次)
+  let disposed = false;
+  let total = 0;
+  let lastTry = 0;
+
+  async function addCell(la, lo) {
+    const key = cellKey(la, lo);
+    if (disposed || cellMeshes.has(key) || pending.has(key)) return;
+    pending.add(key);
+    let items = [];
+    try {
+      items = await fetchCell(la, lo);
+    } catch { /* 靜默:建築是加分不是玩法 */ }
+    pending.delete(key);
+    if (disposed || cellMeshes.has(key)) return;
+    if (!items || !items.length) return; // 失敗/沒資料:fetchCell 的 TTL 會決定何時再試,這裡不用記
+    const mesh = buildMesh(items, latLonToWorld);
+    if (!mesh) return;
+    cellMeshes.set(key, mesh);
+    group.add(mesh);
+    total += items.length;
+  }
+
+  await addCell(lat, lon); // 開場那一格照舊先到(呼叫端本來就不 await 整個 createBuildings)
 
   return {
     group,
-    count: items.length,
+    get count() { return total; },
+    /** 每 1.2 秒的判位線餵進來;3 秒節流,走進沒建過的格子才動作 */
+    update(la, lo) {
+      const now = Date.now();
+      if (now - lastTry < 3000) return;
+      lastTry = now;
+      void addCell(la, lo);
+    },
     dispose() {
+      disposed = true;
       scene.remove(group);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+      for (const mesh of cellMeshes.values()) {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+      }
+      cellMeshes.clear();
     },
   };
 }
