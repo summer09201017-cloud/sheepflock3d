@@ -36,6 +36,23 @@ const DEFAULT_H = 9;            // 沒有任何高度標示時的預設(≈3 層
 const MAX_H = 180;              // 上限:免得資料錯標(實測抓到「101 層」)戳破天空
 const MIN_AREA = 24;            // 太小的輪廓(小屋、雨遮)不畫,省 draw call
 
+/* 0818 使用者四連發:「高樓太高大太厚」「看不到路與牧人」「牧人與羊穿進房子」「全是灰色、
+   街道太窄動彈不得」。根因=真實高度照搬:信義區 180m 大樓=人高(2m)的 90 倍,第三人稱
+   鏡頭(y≈3)整根埋在樓體裡 ⇒ 滿屏灰、不知道路在哪。遊戲化四板斧(快取內容不動——
+   存的是真實高度與輪廓,以下全在建 mesh 時做,舊快取直接受益):
+   ① 高度壓縮:10m 以下(2~3 層)原樣,超過的部分壓 78%,天花板 26m(≈8 層)——
+      高低差還在(平房 vs 大樓看得出來),但不再戳破天空。
+   ② 輪廓向內縮 20%:街廓認得出來,巷弄卻變寬——看得到路、也走得過去。
+   ③ 粉彩配色(per-building vertex color):六色粉彩由輪廓座標穩定雜湊,重建同色不閃爍。
+   ④ 視線遮擋淡出+碰撞:見 updateFade / collide(牧人與羊不再穿牆,擋鏡頭的那格半透明)。 */
+const GAME_H_KEEP = 10;         // 這個高度以下原樣保留
+const GAME_H_RATE = 0.22;       // 超過部分的壓縮率
+const GAME_H_MAX = 26;          // 遊戲內天花板(≈8 層樓)
+const SHRINK = 0.8;             // 輪廓向形心內縮的比例
+const gameHeight = (h) => Math.min(h <= GAME_H_KEEP ? h : GAME_H_KEEP + (h - GAME_H_KEEP) * GAME_H_RATE, GAME_H_MAX);
+const PALETTE = [0xd9d3ea, 0xf0e6d2, 0xf3dbe0, 0xd6e4f0, 0xdcebd8, 0xe7e3da].map((c) => new THREE.Color(c));
+const colorIdx = (ring) => Math.abs(Math.round(ring[0] * 1e6) * 31 + Math.round(ring[1] * 1e6)) % PALETTE.length;
+
 let inFlight = false;
 let lastReqAt = 0;
 
@@ -179,6 +196,7 @@ function areaOf(pts) {
  */
 function buildMesh(items, latLonToWorld) {
   const geos = [];
+  const colliders = [];   // [{minX,maxX,minZ,maxZ,h,pts:Float32Array[x0,z0,…]}] 給 collide/updateFade
   for (const [h, ring] of items) {
     const pts = [];
     for (let i = 0; i < ring.length; i += 2) {
@@ -194,11 +212,33 @@ function buildMesh(items, latLonToWorld) {
       if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6) pts.pop();
     }
     if (pts.length < 3 || areaOf(pts) < MIN_AREA) continue;
+    // ② 輪廓向形心內縮:街廓形狀還在,巷弄變寬(看得到路、走得過去)
+    let cx = 0, cy = 0;
+    for (const p of pts) { cx += p.x; cy += p.y; }
+    cx /= pts.length; cy /= pts.length;
+    for (const p of pts) { p.x = cx + (p.x - cx) * SHRINK; p.y = cy + (p.y - cy) * SHRINK; }
+    const gh = gameHeight(h);   // ① 高度遊戲化壓縮
     try {
       const shape = new THREE.Shape(pts);
-      const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 1 });
+      const g = new THREE.ExtrudeGeometry(shape, { depth: gh, bevelEnabled: false, curveSegments: 1 });
       g.rotateX(-Math.PI / 2);   // 躺平:Shape 的 +z(擠出方向)變成世界的 +y(往上)
+      // ③ 粉彩配色:同一棟一個色,座標雜湊決定 ⇒ 走回來重建同色
+      const col = PALETTE[colorIdx(ring)];
+      const cnt = g.getAttribute("position").count;
+      const carr = new Float32Array(cnt * 3);
+      for (let k = 0; k < cnt; k += 1) { carr[k * 3] = col.r; carr[k * 3 + 1] = col.g; carr[k * 3 + 2] = col.b; }
+      g.setAttribute("color", new THREE.BufferAttribute(carr, 3));
       geos.push(g);
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      const flat = new Float32Array(pts.length * 2);
+      for (let k = 0; k < pts.length; k += 1) {
+        flat[k * 2] = pts[k].x; flat[k * 2 + 1] = pts[k].y;
+        if (pts[k].x < minX) minX = pts[k].x;
+        if (pts[k].x > maxX) maxX = pts[k].x;
+        if (pts[k].y < minZ) minZ = pts[k].y;
+        if (pts[k].y > maxZ) maxZ = pts[k].y;
+      }
+      colliders.push({ minX, maxX, minZ, maxZ, h: gh, pts: flat });
     } catch { /* 自交多邊形之類的怪資料:跳過這一棟,不影響其它 */ }
   }
   if (!geos.length) return null;
@@ -213,19 +253,68 @@ function buildMesh(items, latLonToWorld) {
 
   merged.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({
-    color: 0xd9d3ea,   // 淡紫——學尋羊記 pastelize() 的 #e9e2f4,壓深一點好在戶外底圖上分得出來
-    flatShading: true, // 平面著色:街廓的邊角更清楚(也更像積木,配得上 tsum 造型)
+    vertexColors: true, // ③ 六色粉彩在 vertex color 上(合併後仍分得出棟)
+    flatShading: true,  // 平面著色:街廓的邊角更清楚(也更像積木,配得上 tsum 造型)
   });
   const mesh = new THREE.Mesh(merged, mat);
   mesh.castShadow = false;      // 影子關掉:186 棟投影在手機上太貴,靠受光的明暗就夠立體
   mesh.receiveShadow = false;
   mesh.frustumCulled = true;
-  return mesh;
+  return { mesh, colliders };
+}
+
+/* ---------- ④ 碰撞與視線遮擋的幾何小工具 ---------- */
+// 點在多邊形內 + 最近邊推出:回傳修正後座標,沒碰到回 null
+function pushOut(px, pz, r, pts) {
+  const n = pts.length / 2;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = pts[i * 2], zi = pts[i * 2 + 1], xj = pts[j * 2], zj = pts[j * 2 + 1];
+    if ((zi > pz) !== (zj > pz) && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  let bx = 0, bz = 0, bd = Infinity;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const ax = pts[j * 2], az = pts[j * 2 + 1];
+    const ex = pts[i * 2] - ax, ez = pts[i * 2 + 1] - az;
+    const L2 = ex * ex + ez * ez || 1e-9;
+    let t = ((px - ax) * ex + (pz - az) * ez) / L2;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const qx = ax + ex * t, qz = az + ez * t;
+    const d = (px - qx) * (px - qx) + (pz - qz) * (pz - qz);
+    if (d < bd) { bd = d; bx = qx; bz = qz; }
+  }
+  const dist = Math.sqrt(bd);
+  if (!inside && dist >= r) return null;
+  let dx = px - bx, dz = pz - bz;
+  if (inside) { dx = -dx; dz = -dz; }   // 在樓裡:往最近邊界的外側推
+  const len = Math.hypot(dx, dz) || 1;
+  return { x: bx + (dx / len) * r, z: bz + (dz / len) * r };
+}
+// 線段 ab 與線段 cd 相交時回傳 ab 上的參數 t(0~1),否則 -1
+function segX(ax, az, bx, bz, cx, cz, dx, dz) {
+  const r1x = bx - ax, r1z = bz - az, r2x = dx - cx, r2z = dz - cz;
+  const den = r1x * r2z - r1z * r2x;
+  if (Math.abs(den) < 1e-9) return -1;
+  const t = ((cx - ax) * r2z - (cz - az) * r2x) / den;
+  const u = ((cx - ax) * r1z - (cz - az) * r1x) / den;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : -1;
+}
+// 鏡頭→牧人的視線有沒有被這棟樓擋住(2D 邊相交+相交點高度低於樓頂;鏡頭在樓裡也會命中出口邊)
+function segHitsPoly(cam, tx, ty, tz, b) {
+  const pts = b.pts, n = pts.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const t = segX(cam.x, cam.z, tx, tz, pts[j * 2], pts[j * 2 + 1], pts[i * 2], pts[i * 2 + 1]);
+    if (t >= 0) {
+      const y = cam.y + (ty - cam.y) * t;
+      if (y < b.h) return true;
+    }
+  }
+  return false;
 }
 
 /* ---------- 零相依的 geometry 合併(three 的 BufferGeometryUtils 在本專案沒被打包進來) ---------- */
 function mergeGeometries(geos) {
-  const attrNames = ["position", "normal"];
+  const attrNames = ["position", "normal", "color"];
   let total = 0;
   for (const g of geos) total += g.getAttribute("position").count;
   const out = new THREE.BufferGeometry();
@@ -262,7 +351,7 @@ export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled 
   group.name = "realBuildings";
   scene.add(group);
 
-  const cellMeshes = new Map(); // cellKey → mesh
+  const cellMeshes = new Map(); // cellKey → {mesh, colliders, fade}
   const pending = new Set();    // 正在抓的格子(同格併發只跑一次)
   let disposed = false;
   let total = 0;
@@ -279,10 +368,10 @@ export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled 
     pending.delete(key);
     if (disposed || cellMeshes.has(key)) return;
     if (!items || !items.length) return; // 失敗/沒資料:fetchCell 的 TTL 會決定何時再試,這裡不用記
-    const mesh = buildMesh(items, latLonToWorld);
-    if (!mesh) return;
-    cellMeshes.set(key, mesh);
-    group.add(mesh);
+    const built = buildMesh(items, latLonToWorld);
+    if (!built) return;
+    cellMeshes.set(key, { mesh: built.mesh, colliders: built.colliders, fade: 1 });
+    group.add(built.mesh);
     total += items.length;
   }
 
@@ -298,12 +387,48 @@ export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled 
       lastTry = now;
       void addCell(la, lo);
     },
+    /** ④ 碰撞(0818「牧人與羊會穿進房子裡」):在樓裡/貼太近就推到最近邊界外 r 公尺。
+        呼叫端:每個實體每幀一次;bbox 粗篩後只有腳邊那幾棟會算到多邊形。 */
+    collide(x, z, r = 0.5) {
+      let cx = x, cz = z, hit = false;
+      for (const cell of cellMeshes.values()) {
+        for (const b of cell.colliders) {
+          if (cx < b.minX - r || cx > b.maxX + r || cz < b.minZ - r || cz > b.maxZ + r) continue;
+          const res = pushOut(cx, cz, r, b.pts);
+          if (res) { cx = res.x; cz = res.z; hit = true; }
+        }
+      }
+      return hit ? { x: cx, z: cz } : null;
+    },
+    /** ④ 視線遮擋淡出(0818「看不到路與牧人」):鏡頭→牧人的視線被某棟樓擋住
+        ⇒ 那一格建築整體淡到半透明(合併 mesh 做不到單棟淡,整格淡反而看得到整條街)。 */
+    updateFade(cam, target) {
+      const tx = target.x, tz = target.z;
+      const ty = (target.y || 0) + 1.3;   // 看牧人的頭,不是腳
+      for (const cell of cellMeshes.values()) {
+        let blocked = false;
+        const loX = Math.min(cam.x, tx), hiX = Math.max(cam.x, tx);
+        const loZ = Math.min(cam.z, tz), hiZ = Math.max(cam.z, tz);
+        for (const b of cell.colliders) {
+          if (hiX < b.minX || loX > b.maxX || hiZ < b.minZ || loZ > b.maxZ) continue;
+          if (segHitsPoly(cam, tx, ty, tz, b)) { blocked = true; break; }
+        }
+        const goal = blocked ? 0.42 : 1;
+        cell.fade += (goal - cell.fade) * 0.18;
+        if (Math.abs(cell.fade - goal) < 0.02) cell.fade = goal;
+        const m = cell.mesh.material;
+        if (m.opacity !== cell.fade) {
+          m.opacity = cell.fade;
+          m.transparent = cell.fade < 0.999;
+        }
+      }
+    },
     dispose() {
       disposed = true;
       scene.remove(group);
-      for (const mesh of cellMeshes.values()) {
-        mesh.geometry.dispose();
-        mesh.material.dispose();
+      for (const cell of cellMeshes.values()) {
+        cell.mesh.geometry.dispose();
+        cell.mesh.material.dispose();
       }
       cellMeshes.clear();
     },

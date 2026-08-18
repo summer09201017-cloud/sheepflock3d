@@ -1452,6 +1452,11 @@ export class WarriorGame {
       }
       s.pos.x += Math.sin(s.heading) * s.speed * dt;
       s.pos.z += Math.cos(s.heading) * s.speed * dt;
+      // 🏙 建築碰撞:羊也不穿牆(半徑比牧人小,巷弄跟得進去)
+      if (this.buildings?.collide) {
+        const c = this.buildings.collide(s.pos.x, s.pos.z, 0.4);
+        if (c) { s.pos.x = c.x; s.pos.z = c.z; }
+      }
       s.walkT += dt * (1 + Math.abs(s.speed));
       const g = s.person.group;
       g.position.set(s.pos.x, Math.abs(Math.sin(s.walkT * 6)) * Math.min(0.06, Math.abs(s.speed) * 0.05), s.pos.z);
@@ -2350,6 +2355,8 @@ export class WarriorGame {
     this.handleKeys();
     this.updatePoses();
     this.updateCamera(delta);
+    // 🏙 擋在鏡頭與牧人之間的建築淡出(0818「看不到路與牧人」)
+    if (this.buildings?.updateFade) this.buildings.updateFade(this.camPos, this.my.pos);
 
     this.autoSaveTimer += delta;
     if (this.autoSaveTimer > 5) {
@@ -2412,6 +2419,12 @@ export class WarriorGame {
     if (nx !== f.pos.x || nz !== f.pos.z) f.speed *= 0.5;
     f.pos.x = nx;
     f.pos.z = nz;
+    // 🏙 建築碰撞(0818「牧人與羊會穿進房子裡」):牧人與野獸都走這裡;
+    // collide 直接回推到牆外的點 ⇒ 天然貼牆滑行,不會卡死
+    if (this.buildings?.collide) {
+      const c = this.buildings.collide(f.pos.x, f.pos.z, 0.55);
+      if (c) { f.pos.x = c.x; f.pos.z = c.z; }
+    }
   }
 
   // 身體推擠:玩家與每隻活獸、活獸彼此之間,兩兩互推(倒地的獸不再推擠)

@@ -34,7 +34,7 @@
 // v9(2026-08-12):Overpass 一律改用 GET ?data=(跨來源 POST 不回 CORS header,線上一直被擋)。
 //                 ⚠ 連帶修好 landmarks.js 的線上地標補查 —— 它用 POST,**上線以來從沒成功過**,
 //                   而且失敗是靜默的(記 fail、10 分鐘後再試),沒有任何紅燈。
-const CACHE_NAME = "sheepflock3d-v15";
+const CACHE_NAME = "sheepflock3d-v16";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
