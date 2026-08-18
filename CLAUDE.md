@@ -76,6 +76,21 @@
 >   ⇒ 每按一次「出發」,`realMap`(牧場漫遊的地面)就被洗回 "off" ⇒ 使用者選了真實地圖、重載就變回曠野
 >   (而 main.js 那段註解寫的正是「地面選擇要記得」)。改成先讀既有存檔再蓋。
 
+> v5(2026-08-17 HFP 機,三輪;細節見讀我-HANDOFF 0817 兩個 ★段):🔍 鏡頭縮放(camZoom 0.6~4.0,
+>   滾輪/雙指捏合/🔍鈕)· 🏙 真實建築量體(buildings.js,Overpass 逐格管理器+五道禮貌閘)·
+>   🪧 地標招牌(landmarks.js createPoiMarkers,700m 內彩色光柱+名字)· 🚻 羊公母配飾(基因雜湊推導,
+>   sex 刻意不進跨站格式)· SW v12→v14。
+>
+> v6(2026-08-18 agape250 機):🏙 **建築遊戲化四板斧**(使用者四連發:高樓壓頂/看不到路與牧人/
+>   穿牆/全灰+街窄動彈不得——根因=0817 照搬真實高度,信義區 180m=人高 90 倍,鏡頭埋在樓裡):
+>   ① 高度壓縮 gameHeight()(≤10m 原樣、超過×0.22、天花板 26m)② 輪廓向形心內縮 20%
+>   ③ 粉彩六色 per-building vertex color(座標雜湊,重建同色)④ collide(x,z,r)碰撞
+>   (movePos 牧人/野獸 r0.55、updateFlock 羊 r0.4,最近邊回推=貼牆滑行不卡死)
+>   ⑤ updateFade(camPos,myPos) 視線遮擋淡出(2D 線段×樓邊+撞點高度判定;擋鏡頭那**格**淡到 0.42
+>   ——合併 mesh 做不到單棟淡)。**快取格式不動**,舊快取直接受益。SW v15→**v16**。
+>   驗收=scripts/verify-buildings.mjs(**注入合成建築快取**=零 Overpass 依賴,含 180m 驗天花板)10/10 🟢。
+>   ⚠ localstorage-key-guard 會對它吠「寫了不讀」=測試種快取給 App 讀,刻意如此。
+
 以下為 davidbeasts3d 底座原文(戰鬥引擎照舊適用):
 
 # CLAUDE.md — davidbeasts3d(3D 大衛打獅熊・護羊之戰,撒母耳記上十七章)
