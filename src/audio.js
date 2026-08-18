@@ -100,10 +100,14 @@ export class AudioManager {
     });
   }
 
-  // 🐕 牧羊犬「汪汪」:兩短聲下滑音(合成音效;吠聲不是「唸出來的句子」,不在人聲鐵律範圍)
+  // 🐕 牧羊犬「汪汪」:兩短聲(合成音效;吠聲不是「唸出來的句子」,不在人聲鐵律範圍)。
+  // 0819 使用者:「聽不到汪汪吠」——第一版 gain 0.085/0.09 秒單層滑音,實測近乎無聲。
+  // 改雙層(鋸齒=吠的沙啞+三角=胸腔共鳴)、gain 0.3、拉長到 0.13 秒,才蓋得過環境音。
   bark(pitch = 1) {
-    this.tone({ frequency: 470 * pitch, frequencyEnd: 190 * pitch, duration: 0.09, type: "sawtooth", gain: 0.085 });
-    this.tone({ frequency: 430 * pitch, frequencyEnd: 175 * pitch, duration: 0.1, type: "sawtooth", gain: 0.08, when: 0.14 });
+    for (const when of [0, 0.16]) {
+      this.tone({ frequency: 620 * pitch, frequencyEnd: 240 * pitch, duration: 0.13, type: "sawtooth", gain: 0.3, when });
+      this.tone({ frequency: 310 * pitch, frequencyEnd: 130 * pitch, duration: 0.13, type: "triangle", gain: 0.18, when });
+    }
   }
 
   whistle() {

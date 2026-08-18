@@ -40,7 +40,10 @@
 //                 由來=0818 使用者「pages.dev 看不到高樓大廈」——Overpass 志工端點當天 504+備援逾時,
 //                 agape250 機看得到只是那台瀏覽器有 30 天快取。GPS 區仍走線上,但抓失敗改為吭一聲。
 //                 ⚠ buildings-taipei.json 沒有 hash、走資產 cache-first ⇒ 改包必須連著 bump SW 版本。
-const CACHE_NAME = "sheepflock3d-v17";
+// v18(2026-08-19):🐕 吠聲聽得到了——使用者「漫遊模式聽不到汪汪吠」:事件與振盪器都有在跑
+//                 (Playwright 監測實證),純粹是 gain 0.085/0.09s 單層滑音太小太短。
+//                 改雙層波形 gain 0.3×0.13s、開場 2.5~5 秒先報到吠、巡邏間隔 12~24s→9~18s。
+const CACHE_NAME = "sheepflock3d-v18";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

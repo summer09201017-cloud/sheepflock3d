@@ -1496,7 +1496,7 @@ export class WarriorGame {
           this.my.pos.z + Math.cos(this.my.heading + sp.phase) * 2.6,
         ),
         heading: this.my.heading, speed: 0, walkT: Math.random() * 3,
-        barkT: 10 + Math.random() * 10, guard: false,
+        barkT: 2.5 + Math.random() * 2.5, guard: false,   // 開場先「報到」吠一聲(0819:太久才吠=以為沒聲音)
       };
       person.group.position.set(d.pos.x, 0, d.pos.z);
       person.group.rotation.y = d.heading;
@@ -1565,7 +1565,7 @@ export class WarriorGame {
         d.barkT -= dt;                                 // 巡邏時偶爾開心吠一聲
       }
       if (d.barkT <= 0) {
-        d.barkT = 12 + Math.random() * 12;
+        d.barkT = 9 + Math.random() * 9;   // 兩隻合計約 6~7 秒聽到一聲(0819 從 12~24 收短)
         // 字幕只在「剛站上哨」那一聲出(之後只有汪汪聲)——不然戰鬥中每幾秒洗一行版
         const announce = d.guard && !d._guardSaid;
         if (announce) d._guardSaid = true;
