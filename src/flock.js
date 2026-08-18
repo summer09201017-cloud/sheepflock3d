@@ -164,6 +164,104 @@ export function sheepSexOf(g) {
   return (h & 1) === 1 ? "f" : "m";
 }
 
+// ---------- 🐕 牧羊犬(0818 使用者:「羊群的頭尾各1隻牧羊犬,繞著羊群,來保護羊群」) ----------
+// tsum 圓萌造型與羊同一家族(圓頭大眼水潤高光+腮紅);legs 與 makeGeneSheep 同介面
+// (四支 Box,updateFlock 那套擺腿動畫直接可用),另回傳 tail 給搖尾巴用。
+// 神學鐵則不變:狗跟羊一樣是守護與同行,不是攻擊單位——會擋在野獸前面吠,不咬。
+export function makeSheepdog(variant = "collie") {
+  const V = variant === "shiba"
+    ? { fur: 0xefdcbc, patch: 0xb5762f, earUp: true }   // 柴柴:奶油毛+棕斑+立耳
+    : { fur: 0xf5f2ec, patch: 0x3a3733, earUp: false }; // 邊牧:白毛+黑斑+垂耳
+  const group = new THREE.Group();
+  const furMat = new THREE.MeshStandardMaterial({ color: V.fur, roughness: 0.9 });
+  const patchMat = new THREE.MeshStandardMaterial({ color: V.patch, roughness: 0.9 });
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 12), furMat);
+  body.scale.set(0.95, 0.8, 1.4);
+  body.position.y = 0.48;
+  group.add(body);
+  const back = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 10), patchMat); // 背上一大塊斑
+  back.scale.set(1.1, 0.55, 1.5);
+  back.position.set(0, 0.66, -0.08);
+  group.add(back);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), furMat);
+  head.position.set(0, 0.72, 0.5);
+  group.add(head);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 10), patchMat); // 頭頂斑
+  cap.scale.set(1.05, 0.7, 0.9);
+  cap.position.set(0, 0.84, 0.44);
+  group.add(cap);
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), furMat);
+  muzzle.scale.set(1, 0.75, 0.9);
+  muzzle.position.set(0, 0.66, 0.7);
+  group.add(muzzle);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial({ color: 0x1c1712, roughness: 0.4 }));
+  nose.position.set(0, 0.69, 0.79);
+  group.add(nose);
+
+  // 水潤大眼+腮紅(與羊同款畫法=同一家族的臉)
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1c1712 });
+  for (const sx of [-1, 1]) {
+    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), whiteMat);
+    eyeW.position.set(sx * 0.09, 0.78, 0.68);
+    group.add(eyeW);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 8), pupilMat);
+    pupil.position.set(sx * 0.09, 0.78, 0.712);
+    group.add(pupil);
+    const hi = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 6), whiteMat);
+    hi.position.set(sx * 0.09 + 0.016, 0.8, 0.73);
+    group.add(hi);
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 6), new THREE.MeshStandardMaterial({ color: 0xf0a088, roughness: 0.9 }));
+    blush.scale.set(1.2, 0.7, 0.4);
+    blush.position.set(sx * 0.16, 0.7, 0.62);
+    group.add(blush);
+    // 耳朵:邊牧=垂耳(貼頭側)、柴柴=立耳
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), patchMat);
+    if (V.earUp) { ear.scale.set(0.8, 1.5, 0.55); ear.position.set(sx * 0.13, 0.92, 0.42); }
+    else { ear.scale.set(0.7, 1.3, 0.5); ear.position.set(sx * 0.2, 0.8, 0.44); ear.rotation.z = sx * -0.55; }
+    group.add(ear);
+  }
+  // 微笑舌頭(守護的狗也是開心的狗)
+  const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), new THREE.MeshStandardMaterial({ color: 0xe8788a, roughness: 0.8 }));
+  tongue.scale.set(1, 0.6, 1.1);
+  tongue.position.set(0, 0.6, 0.76);
+  group.add(tongue);
+
+  // 紅項圈+金牌(一眼認出是牧人的狗,不是野狗)
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.035, 8, 14), new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.85 }));
+  collar.rotation.x = Math.PI / 2.25;
+  collar.position.set(0, 0.6, 0.42);
+  group.add(collar);
+  const tag = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshStandardMaterial({ color: 0xf2b93c, roughness: 0.35, metalness: 0.5 }));
+  tag.position.set(0, 0.52, 0.53);
+  group.add(tag);
+
+  // 尾巴(上翹,updateDogs 搖它)
+  const tail = new THREE.Group();
+  const tailFur = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), patchMat);
+  tailFur.scale.set(0.7, 1, 2.2);
+  tailFur.position.set(0, 0.12, -0.12);
+  tail.add(tailFur);
+  const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), furMat); // 白尾尖
+  tailTip.position.set(0, 0.2, -0.26);
+  tail.add(tailTip);
+  tail.position.set(0, 0.62, -0.5);
+  tail.rotation.x = -0.7;
+  group.add(tail);
+
+  // 腿:與羊同介面(四支 Box,前二後二),同一套走路擺動直接吃
+  const legs = [];
+  for (const [lx, lz] of [[-0.14, 0.26], [0.14, 0.26], [-0.14, -0.26], [0.14, -0.26]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.3, 0.075), patchMat);
+    leg.position.set(lx, 0.15, lz);
+    group.add(leg);
+    legs.push(leg);
+  }
+  return { group, legs, tail, head };
+}
+
 // ---------- 🐑 3D 動態頭像(0811 使用者點名「圖鑑的羊要像皮克敏一樣 3D 會動」) ----------
 // 共用**單一** WebGLRenderer 逐卡繪製再 drawImage 到各卡的 2D canvas——
 // 一卡一個 WebGL context 會超過瀏覽器上限(8~16 個)直接黑圖,不可以。

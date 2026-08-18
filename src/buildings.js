@@ -55,6 +55,22 @@ const colorIdx = (ring) => Math.abs(Math.round(ring[0] * 1e6) * 31 + Math.round(
 
 let inFlight = false;
 let lastReqAt = 0;
+let lastFailAt = 0;   // 最近一次「線上抓失敗」的時刻(給遊戲吭一聲用;0=沒失敗過)
+
+/* 🥖 預烤建築包(0818「pages.dev 看不到高樓大廈」):demo 台北測試區的建築烤成靜態 JSON,
+   線上零 Overpass 必有樓。Overpass 是志工服務、0818 實測主端點 504+兩備援逾時——
+   agape250 機看得到只是因為那台瀏覽器有 30 天快取。GPS 模式(使用者所在地)不能烤
+   (隱私鐵則:絕不把任何人家附近烤進公開 repo),仍走線上、失敗改為吭一聲不再全靜默。
+   同 landmarks 的兩源設計:包內的格零網路,包外的格才排隊問 Overpass。 */
+let packPromise = null;
+function loadPack() {
+  if (!packPromise) {
+    packPromise = fetch("./buildings-taipei.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  return packPromise;
+}
 
 /* ---------- 快取(與 landmarks.js 同款,壞檔/私密模式一律當作沒有,不炸) ---------- */
 function readJson(key, fallback) {
@@ -103,8 +119,11 @@ function heightOf(tags = {}) {
 
 /* ---------- Overpass ---------- */
 async function fetchCell(lat, lon) {
-  const cache = loadCache();
   const key = cellKey(lat, lon);
+  // 🥖 預烤包優先:包裡有這一格就直接用(零網路、不記每日額度、不進 localStorage 快取)
+  const pack = await loadPack();
+  if (pack?.cells?.[key]) return pack.cells[key];
+  const cache = loadCache();
   const hit = cache.cells[key];
   const now = Date.now();
   if (hit) {
@@ -176,6 +195,7 @@ async function fetchCell(lat, lon) {
   c2.meta = cache.meta;
   c2.cells[key] = failed ? { at: Date.now(), fail: true, items: hit ? hit.items || [] : [] } : { at: Date.now(), items };
   saveCache(c2);
+  if (failed) lastFailAt = Date.now();
   return failed && hit ? hit.items || [] : items;
 }
 
@@ -380,6 +400,9 @@ export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled 
   return {
     group,
     get count() { return total; },
+    /** 最近一次線上抓失敗的時刻(0=沒失敗過)。給遊戲判斷「該吭一聲」:
+        一棟都沒有+這個非 0 = 志工伺服器在忙,不是玩家的網路或我們壞了。 */
+    get lastFailAt() { return lastFailAt; },
     /** 每 1.2 秒的判位線餵進來;3 秒節流,走進沒建過的格子才動作 */
     update(la, lo) {
       const now = Date.now();

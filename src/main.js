@@ -229,6 +229,11 @@ function handleGameEvent(event) {
       playBleat(event.pitch || 1);
       break;
     }
+    case "dog-bark": { // 🐕 牧羊犬:巡邏偶爾開心吠;站哨(擋在野獸前)吠得勤、字幕吭一聲
+      audio.bark(event.pitch || 1);
+      if (event.guard) pushCommentary(`🐕 ${event.name}擋在野獸前面:汪!汪!(保護羊群)`, "hot", null);
+      break;
+    }
     case "sheep-found": {
       audio.scoreSting();
       audio.crowdCheer(0.8);

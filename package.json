@@ -10,7 +10,10 @@
     "verify:beasts": "node scripts/verify-davidbeasts.mjs http://localhost:4189 scratch",
     "verify:landmarks": "node scripts/verify-landmarks.mjs 4189",
     "verify:crossite": "node scripts/verify-crossite.mjs",
-    "bake:landmarks": "node scripts/gen-landmarks.mjs"
+    "verify:buildings": "node scripts/verify-buildings.mjs 4321",
+    "verify:dogs": "node scripts/verify-dogs.mjs 4321",
+    "bake:landmarks": "node scripts/gen-landmarks.mjs",
+    "bake:buildings": "node scripts/gen-buildings.mjs"
   },
   "dependencies": {
     "three": "^0.177.0"

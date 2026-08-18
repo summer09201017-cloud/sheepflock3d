@@ -91,6 +91,15 @@
 >   驗收=scripts/verify-buildings.mjs(**注入合成建築快取**=零 Overpass 依賴,含 180m 驗天花板)10/10 🟢。
 >   ⚠ localstorage-key-guard 會對它吠「寫了不讀」=測試種快取給 App 讀,刻意如此。
 
+> v7(2026-08-18 HFP 機):🐕 **牧羊犬**(makeSheepdog in flock.js+game.js updateDogs):
+>   忠忠(邊牧)/勇勇(柴柴)相位差 π 繞隊伍橢圓巡邏;戰鬥中獸進羊群 10m ⇒ 最近的狗擋在
+>   獸與羊群之間站哨吠(**守護不攻擊**,傷害零變動);吠=audio.bark 合成音效。
+>   🏙 **demo 建築預烤包** buildings-taipei.json(1373 棟,fetchCell 包優先,零 API):
+>   0818「pages.dev 看不到高樓」破案=Overpass 志工端點當天全倒,agape250 看得到只是 30 天快取
+>   ——**統計/畫面證明不了服務活著**。GPS 區仍線上、失敗改吭一聲。⚠ 包沒 hash 走 cache-first,
+>   改包必連著 bump SW;⚠ verify-buildings 要把包 route 成 200+空 cells(404 會髒 console)。
+>   驗證 verify:dogs 10🟢+verify:buildings 10🟢;SW v16→**v17**。
+
 以下為 davidbeasts3d 底座原文(戰鬥引擎照舊適用):
 
 # CLAUDE.md — davidbeasts3d(3D 大衛打獅熊・護羊之戰,撒母耳記上十七章)

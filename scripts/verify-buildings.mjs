@@ -34,6 +34,13 @@ const errors = [];
 page.on("console", (m) => { if (m.type() === "error" && !isThirdPartyNoise(m.text())) errors.push(m.text()); });
 page.on("pageerror", (e) => errors.push(String(e)));
 
+// 🥖 0818 起 demo 格有預烤建築包(buildings.js 的 fetchCell 是「包優先於快取」)
+// ⇒ 驗收要把包換成空包,注入的合成快取才會被吃到(不換的話 ②④⑤ 的座標斷言全對不上)。
+//   用 200+空 cells 而不是 404:404 會上 console error,把 ⑦「零 console error」弄髒。
+await page.route("**/buildings-taipei.json", (r) => r.fulfill({
+  status: 200, contentType: "application/json", body: '{"cells":{}}',
+}));
+
 try {
   await page.goto(BASE, { waitUntil: "load" });
   await page.evaluate((items) => {
@@ -118,7 +125,7 @@ try {
     // 走到空地(樓群東邊 80m),鏡頭視線不再穿樓 ⇒ 要恢復
     g.my.pos.x = w.x + 80; g.my.pos.z = w.z + 80;
     for (let i = 0; i < 80; i += 1) g.updateCamera(0.1);
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 3000)); // 無頭低幀:0.18/幀的 lerp 收斂要多等(0818 實測 1.5s 差 0.005)
     return { faded, restored: mesh.material.opacity, transparentWhenFaded: faded < 0.999 };
   });
   ok("被擋 → 淡到半透明(<0.6)", fade.faded < 0.6, `opacity=${fade.faded.toFixed(2)}`);

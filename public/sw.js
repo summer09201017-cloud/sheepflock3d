@@ -34,7 +34,13 @@
 // v9(2026-08-12):Overpass 一律改用 GET ?data=(跨來源 POST 不回 CORS header,線上一直被擋)。
 //                 ⚠ 連帶修好 landmarks.js 的線上地標補查 —— 它用 POST,**上線以來從沒成功過**,
 //                   而且失敗是靜默的(記 fail、10 分鐘後再試),沒有任何紅燈。
-const CACHE_NAME = "sheepflock3d-v16";
+// v17(2026-08-18):🐕 牧羊犬忠忠(邊牧)+勇勇(柴柴)——頭尾各一隻繞著羊群巡邏,
+//                 戰鬥中野獸靠近羊群會擋在前面吠(守護不攻擊,傷害數值零變動)。
+//                 🏙 建築改「預烤包優先」:demo 台北測試區烤成 buildings-taipei.json(1373 棟,零 API);
+//                 由來=0818 使用者「pages.dev 看不到高樓大廈」——Overpass 志工端點當天 504+備援逾時,
+//                 agape250 機看得到只是那台瀏覽器有 30 天快取。GPS 區仍走線上,但抓失敗改為吭一聲。
+//                 ⚠ buildings-taipei.json 沒有 hash、走資產 cache-first ⇒ 改包必須連著 bump SW 版本。
+const CACHE_NAME = "sheepflock3d-v17";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

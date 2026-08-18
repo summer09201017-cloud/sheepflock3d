@@ -100,6 +100,12 @@ export class AudioManager {
     });
   }
 
+  // 🐕 牧羊犬「汪汪」:兩短聲下滑音(合成音效;吠聲不是「唸出來的句子」,不在人聲鐵律範圍)
+  bark(pitch = 1) {
+    this.tone({ frequency: 470 * pitch, frequencyEnd: 190 * pitch, duration: 0.09, type: "sawtooth", gain: 0.085 });
+    this.tone({ frequency: 430 * pitch, frequencyEnd: 175 * pitch, duration: 0.1, type: "sawtooth", gain: 0.08, when: 0.14 });
+  }
+
   whistle() {
     this.tone({
       frequency: 1280,

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input.js";
 import { loadSettings, saveSettings, loadSavedGame, saveGameState } from "./storage.js";
-import { makeGeneSheep, randomGenes, loadDex } from "./flock.js";
+import { makeGeneSheep, makeSheepdog, randomGenes, loadDex } from "./flock.js";
 import { findLandmarkAt, topUpLandmarks, landmarkClaimed, claimLandmark, landmarkMeta, createPoiMarkers } from "./landmarks.js";
 
 // —— 牧羊人與羊群(sheepflock3d)——2026-08-11 換皮自 davidbeasts3d(3D 大衛打獅熊・護羊之戰)。
@@ -1277,6 +1277,7 @@ export class WarriorGame {
     this.resetFighters();
     this.roam = !!this.mode.roam;
     this._setupFlockForMatch();
+    this._setupDogsForMatch();
     if (this.roam) {
       // 漫遊:野獸收起來(移到場外遠處+隱形),不進戰鬥判定
       for (const f of this.foes) {
@@ -1405,6 +1406,7 @@ export class WarriorGame {
 
   disableRealMap() {
     this._bAnnounced = false;
+    this._bFailAnnounced = false;
     this._poiAnnounced = false;
     if (this.poiMarkers) { this.poiMarkers.dispose(); this.poiMarkers = null; }
     if (this.buildings) { this.buildings.dispose(); this.buildings = null; }
@@ -1471,6 +1473,140 @@ export class WarriorGame {
         this.emitEvent("sheep-bleat", { pitch: 1.3 + (1 - s.genes.size) });
       }
       prev = s;
+    }
+  }
+
+  // ---------- 🐕 牧羊犬(0818 使用者:「羊群的頭尾各1隻,繞著羊群,來保護羊群」) ----------
+  // 忠忠(邊牧)開場在羊群頭側、勇勇(柴柴)在尾側,兩隻相位差 π 繞著「牧人→最後一隻羊」
+  // 的隊伍橢圓巡邏;戰鬥中野獸靠近羊群,離牠最近的狗會脫隊擋在野獸與羊之間吠(不咬——
+  // 狗與羊同一條神學鐵則:守護與同行,不是攻擊單位,傷害數值零變動)。
+  _setupDogsForMatch() {
+    for (const d of this.dogs || []) this.scene.remove(d.person.group);
+    this.dogs = [];
+    const specs = [
+      { name: "忠忠", variant: "collie", phase: 0, pitch: 1.0 },
+      { name: "勇勇", variant: "shiba", phase: Math.PI, pitch: 1.18 },
+    ];
+    for (const sp of specs) {
+      const person = makeSheepdog(sp.variant);
+      const d = {
+        ...sp, person,
+        pos: new THREE.Vector3(
+          this.my.pos.x + Math.sin(this.my.heading + sp.phase) * 2.6, 0,
+          this.my.pos.z + Math.cos(this.my.heading + sp.phase) * 2.6,
+        ),
+        heading: this.my.heading, speed: 0, walkT: Math.random() * 3,
+        barkT: 10 + Math.random() * 10, guard: false,
+      };
+      person.group.position.set(d.pos.x, 0, d.pos.z);
+      person.group.rotation.y = d.heading;
+      this.scene.add(person.group);
+      this.dogs.push(d);
+    }
+    this._dogOrbitA = 0;
+    this._dogHintT = this._dogIntroDone ? -1 : 3.2;   // 開場稍後介紹一次(不蓋掉模式開場訊息)
+  }
+
+  updateDogs(dt) {
+    if (!this.dogs || !this.dogs.length) return;
+    const preset = DIFFICULTY_PRESETS[this.difficulty];
+    this._dogOrbitA += dt * 0.85;                      // 巡邏角速度:小跑步,不狂奔
+    if (this._dogHintT > 0) {
+      this._dogHintT -= dt;
+      if (this._dogHintT <= 0) {
+        this._dogIntroDone = true;
+        this.message = "🐕 牧羊犬忠忠與勇勇一頭一尾繞著羊群巡邏,保護大家!";
+      }
+    }
+    // 隊伍橢圓:牧人=頭、最後一隻羊=尾;沒帶羊出門就繞著牧人轉
+    const head = this.my.pos;
+    const tail = this.flock.length ? this.flock[this.flock.length - 1].pos : this.my.pos;
+    const cx = (head.x + tail.x) / 2, cz = (head.z + tail.z) / 2;
+    const half = Math.hypot(head.x - tail.x, head.z - tail.z) / 2;
+    const orbitR = clamp(half + 2.4, 2.6, 11);
+    const angle0 = Math.atan2(head.x - tail.x, head.z - tail.z); // 相位 0 = 頭側
+
+    // 戰鬥中:最靠近羊群的活獸(10m 內)由最近的狗去擋
+    let threat = null;
+    if (!this.roam) {
+      let best = 10;
+      for (const f of this.livingFoes()) {
+        const dd = Math.hypot(f.pos.x - cx, f.pos.z - cz);
+        if (dd < best) { best = dd; threat = f; }
+      }
+    }
+    let guardDog = null;
+    if (threat) {
+      let best = Infinity;
+      for (const d of this.dogs) {
+        const dd = Math.hypot(d.pos.x - threat.pos.x, d.pos.z - threat.pos.z);
+        if (dd < best) { best = dd; guardDog = d; }
+      }
+    }
+
+    for (const d of this.dogs) {
+      const wasGuard = d.guard;
+      d.guard = d === guardDog;
+      if (!d.guard) d._guardSaid = false;
+      else if (!wasGuard) d.barkT = Math.min(d.barkT, 0.3);   // 一站上哨就先吠一聲
+      let tx, tz, faceAt = null;
+      if (d.guard) {
+        // 擋位:野獸與羊群中心連線上、離野獸 1.5m 的那一點,臉朝野獸
+        const dx = threat.pos.x - cx, dz = threat.pos.z - cz;
+        const L = Math.hypot(dx, dz) || 1;
+        tx = threat.pos.x - (dx / L) * 1.5;
+        tz = threat.pos.z - (dz / L) * 1.5;
+        faceAt = threat.pos;
+        d.barkT -= dt * 4;                             // 站哨時吠得勤(≈每 3 秒)
+      } else {
+        const a = angle0 + d.phase + this._dogOrbitA;
+        tx = cx + Math.sin(a) * orbitR;
+        tz = cz + Math.cos(a) * orbitR;
+        d.barkT -= dt;                                 // 巡邏時偶爾開心吠一聲
+      }
+      if (d.barkT <= 0) {
+        d.barkT = 12 + Math.random() * 12;
+        // 字幕只在「剛站上哨」那一聲出(之後只有汪汪聲)——不然戰鬥中每幾秒洗一行版
+        const announce = d.guard && !d._guardSaid;
+        if (announce) d._guardSaid = true;
+        this.emitEvent("dog-bark", { pitch: d.pitch * (d.guard ? 1.06 : 1), guard: announce, name: d.name });
+      }
+      // 追目標點(目標一直在動 ⇒ 狗自然一直小跑);狗比羊快,跟得上牧人衝刺
+      const dx = tx - d.pos.x, dz = tz - d.pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.25) {
+        const want = Math.atan2(dx, dz);
+        const diff = wrapAngle(want - d.heading);
+        d.heading += clamp(diff, -4.2 * dt, 4.2 * dt);
+        const targetSpd = Math.min(preset.maxFwd * 1.6, dist * 2.6);
+        d.speed += (targetSpd - d.speed) * Math.min(1, dt * 5);
+      } else {
+        d.speed += (0 - d.speed) * Math.min(1, dt * 6);
+      }
+      d.pos.x += Math.sin(d.heading) * d.speed * dt;
+      d.pos.z += Math.cos(d.heading) * d.speed * dt;
+      const b = this.bound || ARENA_HALF;
+      d.pos.x = clamp(d.pos.x, -b, b);
+      d.pos.z = clamp(d.pos.z, -b, b);
+      // 🏙 狗也不穿牆(半徑同羊,巷弄跟得進去)
+      if (this.buildings?.collide) {
+        const c = this.buildings.collide(d.pos.x, d.pos.z, 0.4);
+        if (c) { d.pos.x = c.x; d.pos.z = c.z; }
+      }
+      // 站哨時臉鎖野獸(移動慢時才鎖得住,免得跑動中原地打轉)
+      if (faceAt && dist <= 1.2) {
+        const wantFace = Math.atan2(faceAt.x - d.pos.x, faceAt.z - d.pos.z);
+        d.heading += clamp(wrapAngle(wantFace - d.heading), -5 * dt, 5 * dt);
+      }
+      d.walkT += dt * (1 + Math.abs(d.speed));
+      const g = d.person.group;
+      g.position.set(d.pos.x, Math.abs(Math.sin(d.walkT * 7)) * Math.min(0.07, Math.abs(d.speed) * 0.05), d.pos.z);
+      g.rotation.y = d.heading;
+      d.person.legs.forEach((leg, li) => {
+        leg.rotation.x = Math.sin(d.walkT * 7 + (li % 2 ? Math.PI : 0)) * Math.min(0.75, Math.abs(d.speed) * 0.42);
+      });
+      // 搖尾巴:巡邏=開心慢搖;站哨=快搖(警戒但不兇——牠是保護者不是攻擊者)
+      d.person.tail.rotation.z = Math.sin(this.time * (d.guard ? 14 : 6) + d.phase) * 0.38;
     }
   }
 
@@ -1557,6 +1693,13 @@ export class WarriorGame {
     if (!this._bAnnounced && this.buildings && this.buildings.count > 0) {
       this._bAnnounced = true;
       this.message = `🏙 附近的建築上好了(${this.buildings.count} 棟)。`;
+    }
+    // 🏙 0818:抓失敗也要吭一聲——「志工伺服器在忙」和「壞了」在畫面上長一樣,
+    // 全靜默的結果就是使用者回報「看不到高樓大廈」(demo 區已預烤所以進不到這行;GPS 區才會)。
+    if (!this._bAnnounced && !this._bFailAnnounced && this.buildings
+        && this.buildings.count === 0 && this.buildings.lastFailAt > 0) {
+      this._bFailAnnounced = true;
+      this.message = "🏙 建築資料的志工伺服器現在正忙——街道照逛,建築等一下會自動再試。";
     }
     if (!this._poiAnnounced && this.poiMarkers && this.poiMarkers.count > 0) {
       this._poiAnnounced = true;
@@ -2319,6 +2462,7 @@ export class WarriorGame {
         this.updateSquadGifts(sdt);
       }
       this.updateFlock(sdt);
+      this.updateDogs(sdt);   // 🐕 牧羊犬:頭尾各一隻繞著羊群巡邏(0818)
       this.resolveBodyPush();
       this.syncFighterTransforms();
 

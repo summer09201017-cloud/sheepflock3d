@@ -1,7 +1,36 @@
 ============================================================
 牧羊人與羊群 3D(sheepflock3d)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-08-18(agape250 機・Fable 5) · 給「另一台 PC / 下一手 AI」接手用
+更新:2026-08-18(HFP 機・Fable 5・下午場) · 給「另一台 PC / 下一手 AI」接手用
 ============================================================
+
+■ 2026-08-18(HFP 機・下午):🐕 牧羊犬頭尾護群 + 🏙 demo 建築預烤包(「pages.dev 看不到高樓」破案)✅
+  使用者兩件:①「羊群的頭尾各增加1隻牧羊犬,繞著羊群,來保護羊群」②「pages.dev 看不到高樓大廈,
+  但在 agape250 玩的時候有看到」。
+  - 🏙 ②破案:程式與部署都沒錯——建築靠 Overpass 志工服務,0818 下午實測主端點 504、
+    kumi/private.coffee 逾時 35s+ ⇒ 新裝置/新瀏覽器一棟都拿不到;agape250 看得到只是
+    那台瀏覽器有 30 天 localStorage 快取。**「看得到」證明不了服務活著,只證明快取還沒過期。**
+  - 修法=與 landmarks 同帖藥:scripts/gen-buildings.mjs 把 demo 信義區(玩家 ±400m 走得到的
+    2 格)烤成 public/buildings-taipei.json(1373 棟/216KB;fr 端點救場+官方 0.6 map API 保底)。
+    buildings.js fetchCell **包優先**(零網路/不記額度/不進快取);GPS 區不烤(隱私鐵則),
+    仍走線上,但抓失敗新增吭一聲(game.js _bFailAnnounced:「志工伺服器現在正忙」——
+    「排隊中」和「壞了」在畫面上長一樣,0817 建築到貨吭聲的同一課)。
+    ⚠ buildings-taipei.json 沒 hash、走 SW 資產 cache-first ⇒ **改包必須連著 bump SW**。
+    ⚠ verify-buildings.mjs 已補「把包 route 成 200+空 cells」——包優先會蓋掉注入的合成快取,
+      不擋 ②④⑤ 座標斷言全對不上;用 404 擋會把 ⑦ 零 console error 弄髒(踩過)。
+  - 🐕 ①牧羊犬:flock.js makeSheepdog(tsum 圓萌與羊同家族;邊牧忠忠白毛黑斑垂耳/柴柴勇勇
+    奶油毛棕斑立耳,紅項圈金牌,四腿與羊同動畫介面+會搖的尾巴)。game.js _setupDogsForMatch
+    +updateDogs:相位差 π 繞「牧人→最後一隻羊」的隊伍橢圓巡邏(半徑=隊長/2+2.4,夾 2.6~11),
+    戰鬥中野獸進羊群 10m ⇒ 最近的狗脫隊**擋在獸與羊群連線上離獸 1.5m**站哨、臉鎖獸、吠得勤
+    (字幕只在剛站上哨那一聲,免洗版)。**守護不攻擊**(神學鐵則同羊:傷害數值零變動)。
+    狗吃建築碰撞(r0.4)+bound clamp;吠聲=audio.bark() 兩短聲下滑鋸齒波(合成音效,
+    不是唸出來的句子,不在人聲鐵律範圍)。
+  - 驗證:scripts/verify-dogs.mjs(新,npm run verify:dogs)10 🟢——雙狗齊件/相位 π/繞角前進/
+    不脫隊/站哨就位<3.2m/擋位夾角<40°/**獸血零變動**/零 console error。verify-buildings 迴歸
+    10 🟢。⚠ 無頭 rAF 節流:3 秒真實時間≈1 秒遊戲時間,速率類斷言只驗「有前進」;
+    戰鬥 gate 要 g.strike() 才進 battle(踩過兩次)。
+  - SW v16→**v17**,wrangler pages deploy 上線;線上新裝置模擬(清 localStorage)=
+    123 棟即到+忠忠勇勇在場+零 pageerror。package.json 補 verify:buildings/verify:dogs/
+    bake:buildings 三條(test-registry 對齊)。
 
 ■ 2026-08-18(agape250 機):🏙 建築「遊戲化四板斧」——高樓壓頂/全灰/穿牆/看不到路 一次修 ✅
   使用者四連發:「高樓大廈太高大太厚」「看不到路與牧人」「牧人與羊會穿進房子裡」
