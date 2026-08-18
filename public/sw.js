@@ -43,7 +43,10 @@
 // v18(2026-08-19):🐕 吠聲聽得到了——使用者「漫遊模式聽不到汪汪吠」:事件與振盪器都有在跑
 //                 (Playwright 監測實證),純粹是 gain 0.085/0.09s 單層滑音太小太短。
 //                 改雙層波形 gain 0.3×0.13s、開場 2.5~5 秒先報到吠、巡邏間隔 12~24s→9~18s。
-const CACHE_NAME = "sheepflock3d-v18";
+// v19(2026-08-19):🏙 第三種沉默也吭聲——「抓成功但 0 棟」(OSM 這一帶沒人畫過建築)
+//                 之前只有「到貨」與「伺服器忙」兩種訊息,成功的空白=什麼都不說,
+//                 使用者在家用 GPS 模式看到的就是這個(「沒看到狀態列」0819 回報)。
+const CACHE_NAME = "sheepflock3d-v19";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

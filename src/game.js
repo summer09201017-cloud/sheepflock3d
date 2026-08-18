@@ -1407,6 +1407,7 @@ export class WarriorGame {
   disableRealMap() {
     this._bAnnounced = false;
     this._bFailAnnounced = false;
+    this._bEmptyAnnounced = false;
     this._poiAnnounced = false;
     if (this.poiMarkers) { this.poiMarkers.dispose(); this.poiMarkers = null; }
     if (this.buildings) { this.buildings.dispose(); this.buildings = null; }
@@ -1692,6 +1693,7 @@ export class WarriorGame {
     // 不吭聲使用者只會覺得「都看不到」(0817 實際回報)。
     if (!this._bAnnounced && this.buildings && this.buildings.count > 0) {
       this._bAnnounced = true;
+      this._bMsgAt = this.time;
       this.message = `🏙 附近的建築上好了(${this.buildings.count} 棟)。`;
     }
     // 🏙 0818:抓失敗也要吭一聲——「志工伺服器在忙」和「壞了」在畫面上長一樣,
@@ -1699,9 +1701,20 @@ export class WarriorGame {
     if (!this._bAnnounced && !this._bFailAnnounced && this.buildings
         && this.buildings.count === 0 && this.buildings.lastFailAt > 0) {
       this._bFailAnnounced = true;
+      this._bMsgAt = this.time;
       this.message = "🏙 建築資料的志工伺服器現在正忙——街道照逛,建築等一下會自動再試。";
     }
-    if (!this._poiAnnounced && this.poiMarkers && this.poiMarkers.count > 0) {
+    // 🏙 0819:抓成功但 0 棟也要吭(第三種沉默)——OSM 公開地圖上沒有志工畫過這一帶的建築,
+    // 伺服器與程式都沒壞;不吭的話與「壞了」在畫面上長一樣(使用者實際回報「沒看到狀態列」)。
+    if (!this._bAnnounced && !this._bFailAnnounced && !this._bEmptyAnnounced && this.buildings
+        && this.buildings.count === 0 && this.buildings.emptyOkAt > 0) {
+      this._bEmptyAnnounced = true;
+      this._bMsgAt = this.time;
+      this.message = "🏙 公開地圖(OpenStreetMap)這一帶還沒有人畫建築——街道與地標照常。";
+    }
+    // 🪧 招牌訊息讓路 4 秒:0819 實測它下一個 1.2s tick 就把建築訊息蓋掉=使用者根本來不及讀
+    if (!this._poiAnnounced && this.poiMarkers && this.poiMarkers.count > 0
+        && (!this._bMsgAt || this.time - this._bMsgAt > 4)) {
       this._poiAnnounced = true;
       this.message = `🪧 附近有 ${this.poiMarkers.count} 面地標招牌(學校/公園/商店,拉遠更好認)。`;
     }

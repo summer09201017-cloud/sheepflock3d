@@ -56,6 +56,7 @@ const colorIdx = (ring) => Math.abs(Math.round(ring[0] * 1e6) * 31 + Math.round(
 let inFlight = false;
 let lastReqAt = 0;
 let lastFailAt = 0;   // 最近一次「線上抓失敗」的時刻(給遊戲吭一聲用;0=沒失敗過)
+let emptyOkAt = 0;    // 最近一次「抓成功但 0 棟」= OSM 這一帶沒人畫過建築(0819:這也要吭,不然三不管沉默)
 
 /* 🥖 預烤建築包(0818「pages.dev 看不到高樓大廈」):demo 台北測試區的建築烤成靜態 JSON,
    線上零 Overpass 必有樓。Overpass 是志工服務、0818 實測主端點 504+兩備援逾時——
@@ -128,7 +129,10 @@ async function fetchCell(lat, lon) {
   const now = Date.now();
   if (hit) {
     const ttl = hit.fail ? FAIL_TTL : hit.items && hit.items.length ? CELL_TTL : MISS_TTL;
-    if (now - (hit.at || 0) < ttl) return hit.items || [];
+    if (now - (hit.at || 0) < ttl) {
+      if (!hit.fail && !(hit.items || []).length) emptyOkAt = now; // 快取的「這裡真的沒建築」也要吭
+      return hit.items || [];
+    }
   }
   if (inFlight) return hit ? hit.items || [] : [];
   if (now - lastReqAt < MIN_GAP_MS) return hit ? hit.items || [] : [];
@@ -196,6 +200,7 @@ async function fetchCell(lat, lon) {
   c2.cells[key] = failed ? { at: Date.now(), fail: true, items: hit ? hit.items || [] : [] } : { at: Date.now(), items };
   saveCache(c2);
   if (failed) lastFailAt = Date.now();
+  else if (!items.length) emptyOkAt = Date.now();
   return failed && hit ? hit.items || [] : items;
 }
 
@@ -403,6 +408,9 @@ export async function createBuildings(scene, { lat, lon, latLonToWorld, enabled 
     /** 最近一次線上抓失敗的時刻(0=沒失敗過)。給遊戲判斷「該吭一聲」:
         一棟都沒有+這個非 0 = 志工伺服器在忙,不是玩家的網路或我們壞了。 */
     get lastFailAt() { return lastFailAt; },
+    /** 最近一次「抓成功但這一帶 0 棟」的時刻(0=沒發生過)= OSM 上沒人畫過這一帶的建築。
+        與 lastFailAt 是不同的病:一個是「伺服器忙」、一個是「資料庫真的空白」,吭的話不一樣。 */
+    get emptyOkAt() { return emptyOkAt; },
     /** 每 1.2 秒的判位線餵進來;3 秒節流,走進沒建過的格子才動作 */
     update(la, lo) {
       const now = Date.now();
