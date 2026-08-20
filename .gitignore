@@ -8,3 +8,4 @@ dist
 .netlify
 scratch-verify
 scratch
+.wrangler/
