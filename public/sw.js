@@ -46,7 +46,7 @@
 // v19(2026-08-19):🏙 第三種沉默也吭聲——「抓成功但 0 棟」(OSM 這一帶沒人畫過建築)
 //                 之前只有「到貨」與「伺服器忙」兩種訊息,成功的空白=什麼都不說,
 //                 使用者在家用 GPS 模式看到的就是這個(「沒看到狀態列」0819 回報)。
-const CACHE_NAME = "sheepflock3d-v20";
+const CACHE_NAME = "sheepflock3d-v21";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

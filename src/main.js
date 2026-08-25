@@ -211,14 +211,14 @@ function handleGameEvent(event) {
     case "roam-start": {
       audio.whistle();
       pushCommentary("牧場漫遊——聽,曠野裡有羊在咩咩叫!", "info",
-        window.__introSpoken ? null : FLOCK_SCRIPTURES.intro);
+        window.__introSpoken ? PHRASES[21] : FLOCK_SCRIPTURES.intro);
       window.__introSpoken = true;
       break;
     }
     case "lost-appear": {
       audio.uiTap();
       audio.vibrate(12);
-      pushCommentary("有迷失的羊!循著光柱走過去。", "cool", null);
+      pushCommentary("有迷失的羊!循著光柱走過去。", "cool", PHRASES[15]);
       break;
     }
     case "sheep-cry": { // 迷羊在遠處呼喚:妹妹的咩咩聲(略高=著急的小羊)
@@ -231,7 +231,7 @@ function handleGameEvent(event) {
     }
     case "dog-bark": { // 🐕 牧羊犬:巡邏偶爾開心吠;站哨(擋在野獸前)吠得勤、字幕吭一聲
       audio.bark(event.pitch || 1);
-      if (event.guard) pushCommentary(`🐕 ${event.name}擋在野獸前面:汪!汪!(保護羊群)`, "hot", null);
+      if (event.guard) pushCommentary(`🐕 ${event.name}擋在野獸前面:汪!汪!(保護羊群)`, "hot", PHRASES[16]);
       break;
     }
     case "sheep-found": {
@@ -243,13 +243,13 @@ function handleGameEvent(event) {
     }
     case "sheep-bell": {
       audio.uiTap();
-      pushCommentary("🔔 鈴鐺羊搖鈴——野獸分神了!", "hot", null);
+      pushCommentary("🔔 鈴鐺羊搖鈴——野獸分神了!", "hot", PHRASES[17]);
       break;
     }
     case "sheep-wool": {
       audio.rebound();
       audio.vibrate(20);
-      pushCommentary("🧣 絨毛羊蓬的一聲擋在前面——這一下不痛!", "hot", null);
+      pushCommentary("🧣 絨毛羊蓬的一聲擋在前面——這一下不痛!", "hot", PHRASES[18]);
       break;
     }
     case "match-start": {
@@ -779,11 +779,11 @@ async function setupGroundForMatch() {
   if (want === "walk") {
     game.setRealWalk(true);
     startRealWalkWatch();
-    pushCommentary("🚶 實走模式!你走到哪,牧人與羊群就跟到哪——走路請抬頭看路,建議在公園或教會園區用。", "hot", null);
+    pushCommentary("🚶 實走模式!你走到哪,牧人與羊群就跟到哪——走路請抬頭看路,建議在公園或教會園區用。", "hot", PHRASES[19]);
   } else {
     pushCommentary(want === "demo"
       ? "🗺 台北測試地圖!牧人和羊群走在真實街道上——羊散在附近幾百公尺,走過去找牠們。"
-      : "🗺 這是你家附近的真實地圖!羊散在附近幾百公尺的街上,像尋羊記那樣把牠們找回來。", "hot", null);
+      : "🗺 這是你家附近的真實地圖!羊散在附近幾百公尺的街上,像尋羊記那樣把牠們找回來。", "hot", PHRASES[20]);
   }
 }
 
