@@ -3,6 +3,7 @@ import { InputManager } from "./input.js";
 import { loadSettings, saveSettings, loadSavedGame, saveGameState } from "./storage.js";
 import { makeGeneSheep, makeSheepdog, randomGenes, loadDex } from "./flock.js";
 import { findLandmarkAt, topUpLandmarks, landmarkClaimed, claimLandmark, landmarkMeta, createPoiMarkers } from "./landmarks.js";
+import { createRealWalk } from "./realwalk.js";
 
 // —— 牧羊人與羊群(sheepflock3d)——2026-08-11 換皮自 davidbeasts3d(3D 大衛打獅熊・護羊之戰)。
 // 新增:🐑 羊群系統(src/flock.js)——牧場漫遊尋回迷羊(路15:4-6)、每隻羊基因長相不同、
@@ -1404,7 +1405,22 @@ export class WarriorGame {
     return true;
   }
 
+  /* 🚶 實走模式(牧10):GPS 是搖桿。要在 enableRealMap 成功**之後**開
+     (latLonToWorld 住在 realMap 上)。main.js 負責 watchPosition,這裡只吃座標。 */
+  setRealWalk(on) {
+    if (!on || !this.realMap || !this.realMap.latLonToWorld) { this.realWalk = null; return false; }
+    const map = this.realMap;
+    this.realWalk = createRealWalk({ latLonToWorld: (lat, lon) => map.latLonToWorld(lat, lon) });
+    return true;
+  }
+
+  feedRealWalk(lat, lon, accuracy) {
+    if (!this.realWalk) return null;
+    return this.realWalk.feed(lat, lon, accuracy);
+  }
+
   disableRealMap() {
+    this.realWalk = null;    // 🚶 地圖收了,實走一起收(不然 feed 會往不存在的地圖投影)
     this._bAnnounced = false;
     this._bFailAnnounced = false;
     this._bEmptyAnnounced = false;
@@ -2532,6 +2548,28 @@ export class WarriorGame {
       this.movePos(f, dt);
       return;
     }
+    /* 🚶 實走模式接管(牧10):GPS 目標在,鍵盤/搖桿的**移動**整段跳過 ——
+       混用會被下一筆定位橡皮筋拉回(你用鍵盤走出去 20 公尺,GPS 說你還在原地)。
+       視角鍵不在這裡,照常可用。抖動的緩衝全在 realwalk.js(死區/速度上限/傳送規則),
+       這裡只負責:朝向平滑轉過去 + 走 movePos(dt=0)讓邊界夾限與建築碰撞照跑。 */
+    if (this.realWalk && this.realMap) {
+      const t = this.realWalk.step(f.pos.x, f.pos.z, dt);
+      if (t) {
+        if (t.moving && t.heading !== null) {
+          const diff = wrapAngle(t.heading - f.heading);
+          f.heading += clamp(diff, -3.2 * dt, 3.2 * dt);
+        }
+        f.speed = t.moving ? Math.min(t.speed, 4.8) : 0;
+        f.pos.x = t.x;
+        f.pos.z = t.z;
+        this.movePos(f, 0);        // dt=0 ⇒ 不再積分,只跑邊界夾限+建築碰撞
+        f.walkT += dt * (Math.abs(f.speed) / 2.4);
+      } else {
+        f.speed += (0 - f.speed) * Math.min(1, dt * 6);
+      }
+      return;
+    }
+
     const preset = DIFFICULTY_PRESETS[this.difficulty];
     const stunned = f.stunT < this._stunDur();
     const wantBlock = this.input.isDown("action") && !stunned && f.chargeT < 0;

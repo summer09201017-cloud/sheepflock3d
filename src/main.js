@@ -715,9 +715,42 @@ function getPosition(timeoutMs = 9000) {
   });
 }
 
+/* 🚶 實走模式(牧10)的連續定位。與 getPosition(一次性)分開:
+   那支拿到第一筆就 clearWatch(拿來定地圖中心),這支一直聽、一直餵給 game。
+   ★ 分頁藏起來就停(省電;背景 GPS 多數瀏覽器也會斷),回前景自動重開。 */
+let realWalkWatchId = null;
+let realWalkAccWarnAt = 0;
+function stopRealWalkWatch() {
+  if (realWalkWatchId !== null) {
+    try { navigator.geolocation.clearWatch(realWalkWatchId); } catch { /* ignore */ }
+    realWalkWatchId = null;
+  }
+}
+function startRealWalkWatch() {
+  stopRealWalkWatch();
+  if (!navigator.geolocation || !window.isSecureContext) return;
+  realWalkWatchId = navigator.geolocation.watchPosition(
+    (p) => {
+      const r = game.feedRealWalk(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
+      /* 訊號爛要講,不能讓人以為遊戲壞了(牧人原地不動的原因是精度閘門在擋)。30 秒最多唸一次。 */
+      if (r && r.ok === false && r.reason === "acc" && Date.now() - realWalkAccWarnAt > 30000) {
+        realWalkAccWarnAt = Date.now();
+        pushCommentary(`📍 定位誤差 ±${Math.round(p.coords.accuracy)} 公尺——牧人先原地等訊號(走到空曠處會準)。`, "cool", null);
+      }
+    },
+    () => { /* 單筆失敗不吵,watch 會自己重試 */ },
+    { enableHighAccuracy: true, maximumAge: 1000 },
+  );
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopRealWalkWatch();
+  else if (ui.realMapSelect.value === "walk" && game.realWalk) startRealWalkWatch();
+});
+
 async function setupGroundForMatch() {
   const want = ui.realMapSelect.value;
   const isRoam = selectedModeId === "seek";
+  stopRealWalkWatch();
   game.disableRealMap();
   ui.mapCredit.hidden = true;
   if (want === "off" || !isRoam) return;
@@ -743,9 +776,15 @@ async function setupGroundForMatch() {
     return;
   }
   ui.mapCredit.hidden = false; // OSM 授權:地圖一上場就要標來源
-  pushCommentary(want === "demo"
-    ? "🗺 台北測試地圖!牧人和羊群走在真實街道上——羊散在附近幾百公尺,走過去找牠們。"
-    : "🗺 這是你家附近的真實地圖!羊散在附近幾百公尺的街上,像尋羊記那樣把牠們找回來。", "hot", null);
+  if (want === "walk") {
+    game.setRealWalk(true);
+    startRealWalkWatch();
+    pushCommentary("🚶 實走模式!你走到哪,牧人與羊群就跟到哪——走路請抬頭看路,建議在公園或教會園區用。", "hot", null);
+  } else {
+    pushCommentary(want === "demo"
+      ? "🗺 台北測試地圖!牧人和羊群走在真實街道上——羊散在附近幾百公尺,走過去找牠們。"
+      : "🗺 這是你家附近的真實地圖!羊散在附近幾百公尺的街上,像尋羊記那樣把牠們找回來。", "hot", null);
+  }
 }
 
 ui.startMatchButton.addEventListener("click", async () => {
@@ -779,6 +818,7 @@ ui.continueSavedButton.addEventListener("click", () => {
 ui.loadButton.addEventListener("click", loadIntoUi);
 
 ui.menuButton.addEventListener("click", () => {
+  stopRealWalkWatch();   // 🚶 回選單就別再吃電了(地圖與 realWalk 由下一次 setupGround 收)
   unlockAudio();
   audio.uiTap();
   openHomeScreen();

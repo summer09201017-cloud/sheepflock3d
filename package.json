@@ -13,7 +13,8 @@
     "verify:buildings": "node scripts/verify-buildings.mjs 4321",
     "verify:dogs": "node scripts/verify-dogs.mjs 4321",
     "bake:landmarks": "node scripts/gen-landmarks.mjs",
-    "bake:buildings": "node scripts/gen-buildings.mjs"
+    "bake:buildings": "node scripts/gen-buildings.mjs",
+    "verify:realwalk": "node scripts/verify-realwalk.mjs"
   },
   "dependencies": {
     "three": "^0.177.0"
