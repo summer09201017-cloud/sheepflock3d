@@ -65,7 +65,12 @@
 //                   改成**相對鏡頭**:比較角色右向量與鏡頭右向量,反向就翻符號;
 //                   |點積|<0.3(角色正對/背對鏡頭)沿用上一次的符號,避免在奇異點翻來翻去。
 //                   ★ 跟隨(點積 +1)與側身跟隨(+0.08 走 hysteresis)行為完全不變。
-const CACHE_NAME = "sheepflock3d-v22";
+// v23(2026-08-26):🐑 羊圈格式同步 sex/deco(尋羊記 v29 加的公母與配飾)。
+//                 ★ 本站**畫法不動**:它的 makeGeneSheep 不吃 sex ⇒ 不畫配飾(降級,不會壞)。
+//                   同步的目的是 normalizeEntry **不要把這兩個欄位洗掉**——不同步的話,
+//                   羊搬過來再搬回去會掉配飾。(不過那兩個欄位是從 id 現算的,所以就算掉了
+//                   對面也會重新算出同一隻;同步只是讓格式乾淨。)
+const CACHE_NAME = "sheepflock3d-v23";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
