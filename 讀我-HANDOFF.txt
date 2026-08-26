@@ -10,7 +10,10 @@
   ⚠ 詞庫**只在尾端追加**——battle 用索引取句(PHRASES[0..14]),中間插句=整組錯位。
   gen-voice 累加烤 7 句(made 7/failed 0,voice 共 31 mp3);manifest 走 SW 資產 cache-first
   ⇒ SW v20→**v21**。verify:dogs 10🟢(要先起 4321:npx vite preview --port 4321)、
-  verify:realwalk 13🟢、vite build ✓、pages deploy 已上線並線上驗過。
+  verify:realwalk 13🟢、vite build ✓、pages deploy 已上線並線上驗過(sw v21+新句 mp3 200)。
+  ⚠ 部署曾被 zero-pii-guard 禁字表擋:buildings-taipei.json 的**座標小數**撞上表裡
+  兩條 4 位純數字。使用者 0825 拍板「照建議改」⇒ 只移除那 2 條(4 位數在公開資料裡
+  天天出現=保護力趨近零;原檔備份在 ~/.pii-forbid.txt.bak-2026-08-25)。守門本身不動。
 
 ■ 2026-08-18(HFP 機・下午):🐕 牧羊犬頭尾護群 + 🏙 demo 建築預烤包(「pages.dev 看不到高樓」破案)✅
   使用者兩件:①「羊群的頭尾各增加1隻牧羊犬,繞著羊群,來保護羊群」②「pages.dev 看不到高樓大廈,
