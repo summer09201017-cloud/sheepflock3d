@@ -60,6 +60,7 @@ const ui = {
   dexFab: document.querySelector("#dexFab"),
   realMapSelect: document.querySelector("#realMapSelect"),
   landmarkSelect: document.querySelector("#landmarkSelect"),
+  todSelect: document.querySelector("#todSelect"),
   mapCredit: document.querySelector("#mapCredit"),
   dexModal: document.querySelector("#dexModal"),
   dexGrid: document.querySelector("#dexGrid"),
@@ -107,6 +108,8 @@ function persistSettings() {
     // 🗺 地標補查開關。★ 沒有這個元素時要維持 true(預設開啟),不能寫成 `=== "on"` ——
     //    那樣在元素還沒渲染出來時會被存成 false,使用者從沒關過卻被關掉。
     landmarksOnline: ui.landmarkSelect ? ui.landmarkSelect.value !== "off" : true,
+    // 🌅 時段氛圍。同上:元素還沒渲染時要維持 true,不可寫成 `=== "on"`(會把沒關過的人關掉)
+    realTod: ui.todSelect ? ui.todSelect.value !== "off" : true,
   });
 }
 
@@ -155,6 +158,19 @@ if (ui.landmarkSelect) {
   ui.landmarkSelect.addEventListener("change", () => {
     unlockAudio();
     audio.uiTap();
+    persistSettings();
+  });
+}
+/* 🌅 時段氛圍開關(0826)。同上兩條慣例:預設開啟、舊存檔沒這個鍵不可讀成關閉。
+   ★ 改了要**當場生效**(不必重開遊戲)—— game.todOn 直接寫過去,
+     下一幀 updateWeather 就會用新值(那支每幀都在跑)。 */
+if (ui.todSelect) {
+  ui.todSelect.value = settings.realTod === false ? "off" : "on";
+  game.todOn = settings.realTod !== false;
+  ui.todSelect.addEventListener("change", () => {
+    unlockAudio();
+    audio.uiTap();
+    game.todOn = ui.todSelect.value !== "off";
     persistSettings();
   });
 }

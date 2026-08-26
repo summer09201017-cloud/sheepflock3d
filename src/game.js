@@ -1006,6 +1006,9 @@ export class WarriorGame {
     const rim = new THREE.DirectionalLight(0xbfe0ff, 0.45);
     rim.position.set(-25, 30, 25);
     this.scene.add(rim);
+    // 🌅 0826:三盞燈都要留參考,時段氛圍(realTod)換的就是它們的顏色與太陽方位
+    this.hemiLight = sun;
+    this.rimLight = rim;
 
     // 🗺 真實地圖模式要把「曠野牧場」整組藏起來(遠山/橄欖樹/草地不能疊在台北街道上)。
     // 這裡用「前後快照 scene.children」收集本段加進去的物件——比在 buildPasture 裡逐行改 this.scene.add 安全。
@@ -1350,7 +1353,11 @@ export class WarriorGame {
      成功=腳下換成你所在位置的街道、活動範圍放大到 ±400 公尺、曠野牧場整組收起來;
      失敗(沒網路/圖磚被擋)=回 false,呼叫端就留在曠野牧場照玩(離線鐵則)。 */
   async enableRealMap(lat, lon) {
-    const { createRealMap } = await import("./realmap.js");
+    /* 🌅 setGroundTod 跟著同一次動態 import 取出來存著 ——
+       realmap.js 是**刻意動態載入**的(曠野模式不載它,省首屏),
+       所以不可以為了時段氛圍在檔頭加一條靜態 import,那會把它拉回主包。 */
+    const { createRealMap, setGroundTod } = await import("./realmap.js");
+    this._setGroundTod = setGroundTod;
     let map = null;
     try {
       map = await createRealMap(this.scene, { lat, lon, radius: 2 });
@@ -2283,9 +2290,74 @@ export class WarriorGame {
     this.blizzardWarned = false;
   }
 
+  /* 🎥 轉向要相對「鏡頭」,不是相對「角色自己」(0826 使用者實測回報)
+     ─────────────────────────────────────────────────────────────────────────
+     原話:「側面轉播,我方向鍵按右轉,結果往左轉(逆時鐘);按左轉,結果往右轉。」
+     ★ 根因(可以算出來,不必猜):`heading += turn` 而 heading 增加 = 往**角色自己的左邊**轉。
+       跟隨視角下鏡頭的右邊剛好就是角色的右邊 ⇒ 一致、沒問題(所以這個 bug 只在某些視角出現)。
+       但**側面轉播的漫遊機位固定在世界 +x 側**(轉播車機位,`mid + (9,3.4,0)`):
+       當牧人朝東走 = 朝著鏡頭走過來,他的右手邊在畫面上就是左邊 ⇒ 左右整個反過來。
+     ⇒ 修法:比較「角色的右向量」與「鏡頭的右向量」,反向就把轉向符號翻過來
+       ⇒ **按右永遠是往畫面的右邊轉**,五種視角都一樣。
+
+     ⚠ 奇異點要 hysteresis(這是這個修法唯一會咬人的地方):
+       當角色**正對或背對鏡頭**時,兩個右向量垂直(點積≈0),此時「左右轉」在畫面上
+       其實是「朝鏡頭轉/離開鏡頭轉」,任何符號都不算錯 —— 但符號會在穿越 0 的瞬間翻面,
+       變成「轉到某個角度突然反向」,那**比一致的反向更難操作**。
+       ⇒ |點積| < 0.3 就沿用上一次的符號,不在奇異點附近翻來翻去。
+     ★ 側身跟隨視角的點積恆為 +0.08(從正側面看,左右轉本來就是朝/離鏡頭)⇒ 一律走 hysteresis,
+       行為與修改前完全相同;跟隨視角點積=+1 ⇒ 也不變。**只有側面轉播真的被修到。** */
+  _turnSign() {
+    const camFwd = this.camLook.clone().sub(this.camPos);
+    camFwd.y = 0;
+    if (camFwd.lengthSq() < 1e-6) return this._lastTurnSign || 1;
+    camFwd.normalize();
+    const UP = new THREE.Vector3(0, 1, 0);
+    const camRight = new THREE.Vector3().crossVectors(camFwd, UP);
+    const h = this.my ? this.my.heading : 0;
+    const charRight = new THREE.Vector3().crossVectors(new THREE.Vector3(Math.sin(h), 0, Math.cos(h)), UP);
+    const d = charRight.dot(camRight);
+    if (Math.abs(d) < 0.3) return this._lastTurnSign || 1;    // 奇異點:沿用,不要抖
+    this._lastTurnSign = d > 0 ? 1 : -1;
+    return this._lastTurnSign;
+  }
+
   // 天氣系統保留但預設晴日:一天=50 秒,以正午(12 時暖光)為起點慢慢流動
   dayHours() {
     return (12 + this.time * (24 / 50)) % 24;
+  }
+
+  /* 🌅 真實地圖模式的時段氛圍(0826;走**真實世界時間**)。
+     欄位:sky 天空/霧 · key 方向光(接近白,不染白羊)· hemi/hemiGnd 半球光 · rim 邊光
+           · gnd 地面圖磚的逐通道乘數 · int 方向光強度 · az/el 太陽方位角與仰角
+     ★ 夜晚 sky 用中夜藍(0x4a6a9c)而不是近黑的 0x0a2050:
+       近黑的天空配上「不吃光的雪亮地面」就是原本那個「黑天白地」——
+       天空稍暗、地面微冷,兩邊都看得清,才是走在路上能用的夜景。
+     ★ gnd 夜晚 0.93 是**刻意的下限**(只降 7%):再暗下去路名就開始難讀。 */
+  realTod(hour) {
+    const H = hour != null ? hour : (this._todFake != null ? this._todFake : new Date().getHours());
+    /* ⚠⚠ **三盞燈都會照到角色,所以三盞都要接近白** —— 這一條踩了兩次才寫對:
+       第一版只把「太陽(key)」收白,結果黃昏的**牧羊犬從黑白變成橘褐色**(截圖抓到)——
+       因為半球光 hemi 那時是 0xffd4b0(通道差 79,**比太陽還飽和**),而它照到每一個角色。
+       我的閘門當時只檢查 key ⇒ 全綠 ⇒ **判準只認得自己想到的那一盞,就等於沒在守**
+       (同一天在尋羊記的提示條也犯過一次:只比對記得的那幾個元素)。
+     ⇒ 鐵則:key / hemi / rim **三盞的通道差都 ≤ 0x30**;
+       氛圍一律交給 ①天空 background ②霧 ③地面圖磚染色 —— 那三層都不碰角色。
+       hemiGnd(地面反射色)不在此限:它本來就是在模擬地面的顏色反射上來。 */
+    const T = [
+      { k: "dawn", a: 5, b: 8, sky: 0xf3d3ab, key: 0xfff0dc, hemi: 0xffeedd, hemiGnd: 0x7a8a4a, rim: 0xffe9d5,
+        gnd: [1.04, 1.00, 0.94], int: 1.70, az: 1.25, el: 0.35 },
+      { k: "day", a: 8, b: 16, sky: 0x8fc4e8, key: 0xffffff, hemi: 0xfff6de, hemiGnd: 0x6a7a3a, rim: 0xd8ecff,
+        gnd: [1.00, 1.00, 1.00], int: 2.10, az: 0.60, el: 0.95 },
+      { k: "dusk", a: 16, b: 19, sky: 0xeda878, key: 0xffecdc, hemi: 0xffe8d8, hemiGnd: 0x7a6a44, rim: 0xffe4d0,
+        gnd: [1.05, 0.99, 0.92], int: 1.75, az: -1.25, el: 0.32 },
+      { k: "night", a: 19, b: 5, sky: 0x4a6a9c, key: 0xeaf1ff, hemi: 0xdfe9ff, hemiGnd: 0x4a5a6a, rim: 0xdfeaff,
+        gnd: [0.93, 0.96, 1.05], int: 1.50, az: -0.40, el: 0.80 },
+    ];
+    for (const t of T) {
+      if (t.a < t.b ? (H >= t.a && H < t.b) : (H >= t.a || H < t.b)) return t;
+    }
+    return T[1];
   }
 
   updateWeather(delta) {
@@ -2294,20 +2366,60 @@ export class WarriorGame {
       [9, 0x8fc4e8, 2.1], [16, 0x8fc4e8, 2.1], [18.5, 0xf0854f, 1.0],
       [20, 0x0a2050, 0.35], [24, 0x0a2050, 0.35],
     ];
-    /* 🗺 真實地圖模式鎖在正午:圖磚是**不受光**的貼圖(MeshBasicMaterial),
-       日夜循環只會讓天空變黑、地面照樣雪亮 ⇒ 走一走就變成「黑天配白地」像壞掉。
+    /* 🗺 真實地圖模式**過去**鎖在正午,原因是真的:圖磚是不受光的貼圖(MeshBasicMaterial),
+       只調燈光的話天空會變黑而地面照樣雪亮 ⇒ 走一走變成「黑天配白地」像壞掉。
        ⚠ 順帶治一個沉默的洞:fog 的 near/far 每幀都在這裡被覆寫,
-       enableRealMap 裡設的遠景霧其實**從來沒生效過**(設了沒用=典型的寫了被蓋掉)。 */
+       enableRealMap 裡設的遠景霧其實**從來沒生效過**(設了沒用=典型的寫了被蓋掉)。
+
+       🌅 **0826 起改成有時段氛圍**(使用者:「尋羊記的真實地圖…可以學習參考」→ 拍板「先搬時段氛圍」)。
+       解掉「黑天白地」的關鍵是**天和地一起調**:燈光/天空/霧走這裡,
+       地面圖磚走 realmap.js 的 uTod uniform(見那支檔頭)。
+       ★★ 三條與尋羊記羊11 同一份鐵則(那邊今天實測踩過):
+         ① **方向光一律接近白** —— 光的顏色會直接乘在材質上,而羊是純白的;
+            光一飽和整群羊就變成那個顏色(尋羊記第一版黃昏把白羊染成褐色)。
+            氛圍交給天空/霧/地面,不是交給打在羊身上的那盞光。
+         ② **夜晚只換色、不壓暗** —— 這是走在路上看的地圖,地面暗到看不清路名
+            就是安全問題不是美感問題(地面亮度最多降 7%;天空可以深但不能近黑)。
+         ③ 走**真實世界時間**(不是牧場那個 50 秒一天的加速循環)——
+            傍晚玩就是傍晚的光,那才是「跟現實同一個世界」的意義。
+       ★ 牧場模式維持原本的加速日夜循環(KEYS),那是既有的刻意設計,這裡不動它。 */
     const rm = !!this.realMap;
+    /* ⚠ `h` 是**既有系統**的遊戲時鐘(KEYS 的天空 lerp、極光的夜晚判斷都吃它),
+       realmap 模式維持原本的 12 —— **不可以**讓它跟著真實時間跑:
+       極光是曠野牧場的夜景裝飾,h 一走真實時間,台北街道上晚上就會冒出極光。
+       時段氛圍(realTod)自己讀 new Date(),與這個時鐘刻意分開。
+       ★ 第一版我把 h 移進 else 分支 ⇒ 極光那段 `ReferenceError: h is not defined`
+         (閘門的「零 console error」當場抓到)。 */
     const h = rm ? 12 : this.dayHours();
-    let a = KEYS[0], b = KEYS[KEYS.length - 1];
-    for (let i = 0; i < KEYS.length - 1; i += 1) {
-      if (h >= KEYS[i][0] && h <= KEYS[i + 1][0]) { a = KEYS[i]; b = KEYS[i + 1]; break; }
+    let ca, keyInt;
+    if (rm && this.todOn !== false) {
+      const T = this.realTod();
+      ca = new THREE.Color(T.sky);
+      keyInt = T.int;
+      if (this.keyLight) {
+        this.keyLight.color.setHex(T.key);                       // ① 接近白,不染白羊
+        /* 影子方向跟著太陽走(清晨從東、黃昏從西)。光源要離場景夠遠,
+           不然不同羊被打到的角度差很多,看起來像每隻羊各有一顆太陽。 */
+        this.keyLight.position.set(Math.sin(T.az) * 46, 24 + T.el * 34, Math.cos(T.az) * 46);
+      }
+      if (this.hemiLight) {
+        this.hemiLight.color.setHex(T.hemi);
+        this.hemiLight.groundColor.setHex(T.hemiGnd);
+      }
+      if (this.rimLight) this.rimLight.color.setHex(T.rim);
+      if (this._setGroundTod) this._setGroundTod(T.gnd[0], T.gnd[1], T.gnd[2]);   // ② 地面一起調(治「黑天白地」)
+    } else {
+      let a = KEYS[0], b = KEYS[KEYS.length - 1];
+      for (let i = 0; i < KEYS.length - 1; i += 1) {
+        if (h >= KEYS[i][0] && h <= KEYS[i + 1][0]) { a = KEYS[i]; b = KEYS[i + 1]; break; }
+      }
+      const t = (h - a[0]) / (b[0] - a[0] || 1);
+      ca = new THREE.Color(a[1]).lerp(new THREE.Color(b[1]), t);
+      keyInt = a[2] + (b[2] - a[2]) * t;
+      if (rm && this._setGroundTod) this._setGroundTod(1, 1, 1);  // 關掉時段=地面回到原本的顏色
     }
-    const t = (h - a[0]) / (b[0] - a[0] || 1);
-    const ca = new THREE.Color(a[1]).lerp(new THREE.Color(b[1]), t);
     this.scene.background = ca;
-    if (this.keyLight) this.keyLight.intensity = a[2] + (b[2] - a[2]) * t;
+    if (this.keyLight) this.keyLight.intensity = keyInt;
     const gust = Math.max(0, Math.min(1, (Math.sin(this.time * 0.12) - 0.55) / 0.45));
     if (this.scene.fog) {
       this.scene.fog.color.copy(ca);
@@ -2584,7 +2696,7 @@ export class WarriorGame {
       if (f.chargeT >= 0) target *= 0.5;
       if (f.blocking) target *= 0.35;
       const turn = (this.input.isDown("left") ? 1 : 0) - (this.input.isDown("right") ? 1 : 0);
-      f.heading += turn * preset.turnRate * dt;
+      f.heading += turn * this._turnSign() * preset.turnRate * dt;
       const nearest = this.nearestFoe();
       if (turn === 0 && !this.input.isDown("sprint") && !this.input.isDown("up") && nearest) {
         const dxF = nearest.pos.x - f.pos.x;

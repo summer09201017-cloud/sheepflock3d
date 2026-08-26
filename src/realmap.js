@@ -27,6 +27,25 @@ const LOOK = {
   brightness: 0.88,  // 整體壓暗一點,抵銷 tone mapping 的提亮
 };
 
+/* 🌅 時段氛圍(0826:使用者「尋羊記的真實地圖…可以學習參考」拍板「先搬時段氛圍」)
+   ──────────────────────────────────────────────────────────────────────────────
+   ★★ 為什麼**地面**也要能染色 —— 這是真實地圖模式原本沒有時段氛圍的根本原因:
+     圖磚是 `MeshBasicMaterial`(**不吃光**),所以只調場景燈光的話,
+     天空會變黑而地面照樣雪亮 ⇒ 走一走就變成「黑天配白地」,看起來像壞掉。
+     (game.js 的 updateWeather 就是因為這個把 realmap 模式硬鎖在正午 12 點。)
+   ⇒ 解法:天和地**一起**調 —— 燈光走場景那邊,地面走這裡的 shader。
+   ★ uniform 而不是寫死的字串:三個 LOOK 值原本是 `${...}` 內嵌進 shader 的常數,
+     那樣執行時改不了。染色值必須是 uniform 才能跟著時間變。
+   ★ **共享同一個 uniform 物件**:每塊磚各有自己的 material,但 shader 裡引用的是
+     這同一個物件 ⇒ 改一次,已經貼上的與之後才載入的磚**全部**同步(各自一份的話,
+     後來載入的磚會停在載入那一刻的時段,走一走就出現「補丁色塊」)。
+   ⚠ 夜晚**不可以壓暗**(同尋羊記羊11 的鐵則):這是走在路上看的地圖,
+     地面暗到看不清路名就是安全問題,不是美感問題 ⇒ 只做冷/暖色偏移,亮度最多降 7%。 */
+const todUniform = { value: new THREE.Vector3(1, 1, 1) };   // 逐通道乘數(RGB)
+export function setGroundTod(r, g, b) {
+  todUniform.value.set(r, g, b);
+}
+
 // 公尺/像素(Web Mercator;隨緯度變化——台灣約 0.54,赤道約 0.6)
 export function metersPerPixel(lat, z = TILE_Z) {
   return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, z);
@@ -83,18 +102,23 @@ export async function createRealMap(scene, { lat, lon, radius = 2, z = TILE_Z } 
     /* 🎨 對比/飽和強化(見檔頭 LOOK):注入在 fog 之前 —— 順序很重要,
        要先把圖磚本身的顏色拉出來,再讓霧照常吃它,不然遠處會出現「顏色比近處還鮮」的怪畫面。 */
     mat.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <fog_fragment>",
-        `{
+      // 🌅 共享同一個 uniform 物件 ⇒ 改一次全部的磚同步(見檔頭 setGroundTod 的說明)
+      shader.uniforms.uTod = todUniform;
+      shader.fragmentShader = shader.fragmentShader
+        .replace("void main() {", "uniform vec3 uTod;\nvoid main() {")
+        .replace(
+          "#include <fog_fragment>",
+          `{
            vec3 mc = gl_FragColor.rgb;
            mc = (mc - 0.5) * ${LOOK.contrast.toFixed(3)} + 0.5;
            float ml = dot(mc, vec3(0.2126, 0.7152, 0.0722));
            mc = mix(vec3(ml), mc, ${LOOK.saturation.toFixed(3)});
            mc *= ${LOOK.brightness.toFixed(3)};
+           mc *= uTod;                       // 🌅 時段染色(逐通道;夜晚偏冷、黃昏偏暖)
            gl_FragColor.rgb = clamp(mc, 0.0, 1.0);
          }
          #include <fog_fragment>`,
-      );
+        );
     };
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
