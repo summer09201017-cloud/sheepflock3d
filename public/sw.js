@@ -70,7 +70,7 @@
 //                   同步的目的是 normalizeEntry **不要把這兩個欄位洗掉**——不同步的話,
 //                   羊搬過來再搬回去會掉配飾。(不過那兩個欄位是從 id 現算的,所以就算掉了
 //                   對面也會重新算出同一隻;同步只是讓格式乾淨。)
-const CACHE_NAME = "sheepflock3d-v23";
+const CACHE_NAME = "sheepflock3d-v24";
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {

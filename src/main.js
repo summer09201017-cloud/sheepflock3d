@@ -12,6 +12,8 @@ const ui = {
   cameraButton: document.querySelector("#cameraButton"),
   myScoreLabel: document.querySelector("#myScoreLabel"),
   aiScoreLabel: document.querySelector("#aiScoreLabel"),
+  dogCard: document.querySelector("#dogCard"),
+  dogScoreLabel: document.querySelector("#dogScoreLabel"),
   modeCode: document.querySelector("#modeCode"),
   passLabel: document.querySelector("#passLabel"),
   gapLabel: document.querySelector("#gapLabel"),
@@ -250,6 +252,29 @@ function handleGameEvent(event) {
       if (event.guard) pushCommentary(`🐕 ${event.name}擋在野獸前面:汪!汪!(保護羊群)`, "hot", PHRASES[16]);
       break;
     }
+    /* 🐕 0827 參戰三事件。⚠ 咬中**刻意不吠也不出字幕** —— 站哨時本來就每 3 秒吠一次,
+       再為每一口加一行,戰鬥中會被狗洗版(0819 已經為「吠太頻繁」收過一次)。
+       只有「趴下」與「站起來」值得吭聲,因為那是玩家需要知道的狀態改變。 */
+    case "dog-bite": {
+      audio.uiTap();
+      break;
+    }
+    case "dog-hurt": {
+      audio.bark(1.35);          // 高音短吠=痛叫(不另外做音檔)
+      audio.vibrate([25]);
+      break;
+    }
+    case "dog-down": {
+      audio.bark(0.8);
+      audio.vibrate([60, 40, 60]);
+      pushCommentary(`🐕 ${event.name}被撞倒了,趴著喘口氣——牠會再站起來的!`, "cold");
+      break;
+    }
+    case "dog-up": {
+      audio.bark(1.15);
+      pushCommentary(`🐕 ${event.name}又站起來了,回到羊群旁邊!`, "hot");
+      break;
+    }
     case "sheep-found": {
       audio.scoreSting();
       audio.crowdCheer(0.8);
@@ -333,7 +358,11 @@ function handleGameEvent(event) {
         audio.scoreSting();
         audio.crowdCheer(event.dmg >= 14 ? 0.9 : 0.5);
         audio.vibrate([30, 20, 45]);
-        const spoken = event.weapon === "輕拳" ? PHRASES[1] : event.weapon === "重拳" ? PHRASES[2] : PHRASES[3];
+        /* ⚠ 0827:原本這行拿**畫面顯示字串**比對(event.weapon === "輕拳")決定唸哪一句 ——
+             招式一改名(輕拳→橫掃)兩個比較就全部落空,每次命中都唸同一句,
+             而且**不會有任何錯誤訊息**。改吃穩定 id `moveId`,文案愛怎麼改都不影響邏輯。
+           ★ 通則:顯示文字是給人看的,不是拿來當 key 的。 */
+        const spoken = event.moveId === "light" ? PHRASES[1] : event.moveId === "heavy" ? PHRASES[2] : PHRASES[3];
         pushCommentary(
           `${event.weapon}命中!-${event.dmg}(第 ${event.round} 回合)`,
           "hot",
@@ -637,6 +666,15 @@ game.onHudUpdate = (state) => {
     : state.foes && state.foes.length > 1
       ? state.foes.map((f) => `${f.short}${f.down ? "✓" : Math.round(f.hp)}`).join(" ")
       : String(Math.round(state.aiHp));
+  /* 🐕 牧羊犬血量:戰鬥中才顯示(漫遊時沒有獸,秀血量只是噪音)。
+     趴下顯示「休息中」而不是 0 —— 孩子看到 0 會以為狗死了,而狗不會死。 */
+  if (ui.dogCard) {
+    const dogs = state.dogs || [];
+    const show = !state.roam && dogs.length > 0;
+    ui.dogCard.hidden = !show;
+    if (show) ui.dogScoreLabel.textContent = dogs
+      .map((d) => `${d.name}${d.down ? "休息中" : Math.round(d.hp)}`).join(" ");
+  }
   ui.modeCode.textContent = state.modeLabel;
   ui.passLabel.textContent = state.roundCap ? `${state.roundNo}/${state.roundCap}` : String(state.roundNo);
   ui.gapLabel.textContent = state.gapText;
@@ -661,7 +699,7 @@ game.onHudUpdate = (state) => {
     const bp = document.getElementById("bigPower"), bf = document.getElementById("bigPowerFill");
     if (bp) {
       bp.hidden = state.phaseLabel !== "激戰中";
-      if (ui.bigPowerLabel) ui.bigPowerLabel.textContent = state.charging ? "聖靈金光蓄力" : "重拳出手";
+      if (ui.bigPowerLabel) ui.bigPowerLabel.textContent = state.charging ? "聖靈金光蓄力" : "重劈出手";
       bf.style.transform = `scaleX(${Math.min(1, state.charging ? state.charge01 : state.heavyReady01)})`;
       bf.classList.toggle("full", state.charging ? state.chargeReady : (state.heavyReady && state.inReach));
     }

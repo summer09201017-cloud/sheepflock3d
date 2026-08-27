@@ -39,6 +39,11 @@
             <span class="stack-subtext" id="phaseLabel">主選單</span>
           </div>
         </div>
+        <!-- 🐕 牧羊犬血量(0827:狗會幫忙咬獸,也會受傷 ⇒ 血量要看得見,不然玩家不知道牠怎麼趴下了) -->
+        <div class="score-card team-dogs" id="dogCard" hidden>
+          <span class="score-label">🐕 牧羊犬</span>
+          <strong id="dogScoreLabel">—</strong>
+        </div>
         <div class="score-card team-away">
           <span class="score-label">野獸/尋回</span>
           <strong id="aiScoreLabel">100</strong>
@@ -99,7 +104,7 @@
           </div>
 
           <div class="meter-copy stamina-copy">
-            <span class="mini-label">重拳冷卻(滿=可出手)</span>
+            <span class="mini-label">重劈冷卻(滿=可出手)</span>
             <strong id="windowValue">—</strong>
           </div>
           <div class="meter-track stamina">
@@ -127,9 +132,9 @@
         <div class="panel-block instructions">
           <p class="mini-label">操作</p>
           <p>走位: WASD(前進/後退/轉向)｜衝刺: 按住 Shift</p>
-          <p>輕拳: J(快、傷害低)</p>
-          <p>重拳: K(可蓄力,慢、傷害高、命中擊退;點畫面/空白鍵亦可)</p>
-          <p>聖靈金光: 長按重拳鍵 0.6 秒放開——金色光波,可一次穿透多隻野獸(撒上16:13)!</p>
+          <p>竿橫掃: J(左手長彎鉤,轉腰掃過去——快、傷害低、把野獸推開)</p>
+          <p>杖重劈: K(右手短棒,高高舉起重重打下——慢、傷害高、命中擊退;點畫面/空白鍵亦可)</p>
+          <p>聖靈金光: 長按重劈鍵 0.6 秒放開——金色光波,可一次穿透多隻野獸(撒上16:13)!</p>
           <p>格擋: 按住 C——正面舉臂防禦,近戰減傷;剛舉起被打=完美格擋!</p>
           <p>自動面向: 自動轉身對準最近的野獸(A/D 或前進時不干預)</p>
           <p>蜂蜜: 場上偶爾出現野地的蜂蜜,走近即可回血 25%(多獸時更常出現)</p>
@@ -148,8 +153,8 @@
           <button data-action="down" aria-label="後退">▼</button>
         </div>
         <div class="action-pad">
-          <button data-action="lightAttack">輕拳</button>
-          <button data-action="heavyAttack" class="shoot">重拳</button>
+          <button data-action="lightAttack">竿橫掃</button>
+          <button data-action="heavyAttack" class="shoot">杖重劈</button>
           <button data-action="action">格擋</button>
           <button data-action="sprint" class="sprint">衝刺</button>
           <button data-action="camera">視角</button>
@@ -202,7 +207,7 @@
                 </button>
                 <button class="mode-card" data-mode="practice">
                   <strong>牧場練習</strong>
-                  <span>野獸只走位不攻擊,自由練習輕重拳手感</span>
+                  <span>野獸只走位不攻擊,自由練習竿橫掃與杖重劈的手感</span>
                 </button>
               </div>
               <p id="modeDescription" class="mode-description"></p>
@@ -324,7 +329,7 @@
       </div>
     </div>
 
-      <div class="power-panel-big" id="bigPower" hidden><span id="bigPowerLabel">重拳出手</span><div class="big-track"><div class="big-fill" id="bigPowerFill"></div></div></div>
+      <div class="power-panel-big" id="bigPower" hidden><span id="bigPowerLabel">重劈出手</span><div class="big-track"><div class="big-fill" id="bigPowerFill"></div></div></div>
     <!-- 死神模式恐怖演出層(只在 death 難度觸發;beast-boss-kit §3) -->
     <div id="fangFlash" hidden aria-hidden="true"><div class="fang top"></div><div class="fang bottom"></div></div>
     <div id="darkHand" hidden aria-hidden="true"><div class="dh-heart">❤</div><div class="dh-arm"><div class="dh-palm"></div><div class="dh-f f1"></div><div class="dh-f f2"></div><div class="dh-f f3"></div><div class="dh-f f4"></div></div></div>

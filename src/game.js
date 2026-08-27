@@ -64,7 +64,7 @@ export const GAME_MODES = {
     label: "牧場練習",
     hp: 100,
     passive: true,
-    description: "野獸只走位不攻擊——自由練習輕拳、重拳與聖靈金光的手感。",
+    description: "野獸只走位不攻擊——自由練習橫掃、重劈與聖靈金光的手感。",
     goal: "純練手感,不計勝負",
   },
 };
@@ -102,18 +102,42 @@ export const BEAST_LOADOUTS = {
 // 群獸公平鐵則:獸越多,單獸出手傷害越低(總壓力仍上升),孩子不被圍毆秒殺
 const PACK_DMG_SCALE = { 1: 1, 2: 0.75, 3: 0.6 };
 
-// ---------- 武器系統只留 fists(赤手空拳,不畫武器 mesh) ----------
-// 重拳(K/Space,可蓄力)沿用 fists 這張表;輕拳(J)自成一組更快更輕的量值(見下 LIGHT_PUNCH)。
+/* ---------- 武器=牧人手上那根竿(撒上17:40「手中拿杖」、17:43「你拿杖到我這裡來」)----------
+   ⚠ 0827 起武器**不再是赤手**:竿本來就掛在左手上,但攻擊動畫動的是空的右手
+     ⇒ 玩家看到「竿只搖一下、打不到獸」。現在攻擊由持竿的左臂帶動(見 updateDavidPose)。
+   ⚠ 內部 key 仍叫 `fists`(改 key 會波及存檔與驗收腳本),只有**顯示文字**換掉 ——
+     顯示文字是給人看的,不要拿來當 key(main.js 曾拿 label 比對決定唸哪一句,改名就靜靜壞掉)。
+   K/Space(可蓄力)沿用這張表;J 自成一組更快更輕的量值(見下 LIGHT_PUNCH)。 */
 export const WEAPON_ORDER = ["fists"];
 export const WEAPONS = {
-  fists: { label: "赤手空拳", short: "拳", reach: 1.5, dmg: 15, cd: 1.05, arc: 1.2, swing: "chop", chargeBonus: 0.6, hint: "少年牧人,倚靠耶和華追打野獸" },
+  fists: { label: "牧人的竿", short: "竿", reach: 1.5, dmg: 15, cd: 1.05, arc: 1.2, swing: "chop", chargeBonus: 0.6, hint: "少年牧人手中拿杖,倚靠耶和華追打野獸" },
 };
 
-// 輕拳:快、傷害低、獨立冷卻(不佔重拳的 cd)
+// J 橫掃:快、傷害低、獨立冷卻(不佔重劈的 cd)
 const LIGHT_PUNCH = { dmg: 6, cd: 0.42, reach: 1.4, arc: 1.3 };
 
 // 揮擊「接觸瞬間」(秒)——傷害/閃光/慢動作在這一刻才發生
 const CONTACT_AT = { chop: 0.22 };
+
+/* 🪵 兩種揮竿的時間表(0827)。★★ 動畫與命中判定**共用這一份** ——
+   各寫各的就會出現「畫面還沒打到、血已經掉了」或反過來,而那種錯不會亮任何紅燈。
+   contact = 竿尖抵達獸身的那一刻(傷害在這一刻結算,scripts/verify-staff.mjs 量的也是這一刻)。 */
+/* 🐕 牧羊犬參戰(0827 使用者拍板:「狗可以幫忙攻擊獅子與熊」+「那狗也應該有血量」)
+   ⚠ 這**改掉了 0818 的「守護不攻擊」設計註記** —— 那條不是神學鐵則。
+     神學鐵則管的是**羊**(只支援、不攻擊、永遠不會死),狗不在那條裡面。
+   ★ 但狗**一樣不會死**:血量歸零 = 受傷趴下休息,`downSec` 秒後自己爬起來、回滿血。
+     給主日學孩子看的遊戲不演狗被咬死。畫面上只有「趴下、然後又站起來」。
+   ★ 咬的傷害刻意訂得低(獸血 100 的 4%,還有 1.35 秒冷卻):狗是**幫忙**,
+     得勝仍歸於耶和華(撒上17:37),不是兩隻狗把獅子咬死。 */
+const DOG_COMBAT = {
+  hp: 60,
+  bite: { dmg: 4, cd: 1.35, reach: 1.55, dur: 0.34, contact: 0.14 },
+  hurt: { dmg: 9, cd: 2.4, reach: 1.8 },   // 站太近會被獸掃到
+  downSec: 7,
+};
+
+const LIGHT_SWING = { dur: 0.30, contact: 0.12 };   // J 橫掃:快
+const HEAVY_SWING = { dur: 0.62, wind: 0.16, contact: CONTACT_AT.chop };  // K 高舉直劈:蓄 0.16s 再砸
 
 // 蓄力大招(聖靈金光):長按重拳鍵蓄力,放開發出金色光波(撒上16:13 耶和華的靈大大感動大衛,不血腥)。
 const CHARGE_MIN = 0.6;
@@ -271,7 +295,8 @@ function makePerson({ shirt = DAVID_TUNIC, pants = DAVID_SKIRT, skin = DAVID_SKI
   waist.add(beltLine);
   rig.add(waist);
 
-  // 投石帶(甩石的機弦,撒上17:40)斜背在胸前+腰間小石袋——純裝飾,戰鬥仍是赤手
+  // 投石帶(甩石的機弦,撒上17:40)斜背在胸前+腰間小石袋——這條**是**純裝飾。
+  // ⚠ 0827 起竿與杖都是真武器了,只有投石帶仍沒有玩法(要做是另一個機制,不要跟著改文案)。
   const strapMat = new THREE.MeshStandardMaterial({ color: 0x5a3c22, roughness: 0.85 });
   const strap = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.86, 0.05), strapMat);
   strap.position.set(0, 1.42, 0.18);
@@ -424,8 +449,9 @@ function makeShepherdTsum() {
   const leftArm = mkArm(-0.46);
   const rightArm = mkArm(0.46);
 
-  // 🪵 你的杖、你的竿(詩23:4)——竿=頂端彎鉤的長牧杖握在左手(跟著手臂擺動;
-  // 護胸姿勢下反轉 rotation.x 讓竿平時直立、格擋時自然舉起),杖=短棒插在右腰帶;純裝飾,戰鬥仍是赤手
+  // 🪵 你的杖、你的竿(詩23:4)——竿=頂端彎鉤的長牧杖握在左手,**它就是戰鬥用的武器**
+  // (撒上17:40 大衛「手中拿杖」下到谷中);杖=短棒插在右腰帶,那根才是純裝飾。
+  // ⚠ 竿的角度由 updateDavidPose 每幀反推(staffPitch),下面這個 0.98 只是靜止姿勢的初值。
   const woodMat = tmat(0x8a5a2e, 0.85);
   const staff = new THREE.Group();
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 2.06, 8), woodMat); // ⚠ 長度別動:少一個小數位會撞使用者的 pii 禁字表而擋下部署(原因不寫在這=公開 repo)
@@ -438,6 +464,12 @@ function makeShepherdTsum() {
   staff.position.set(0, -0.1, 0.05);
   staff.rotation.x = 0.98; // 抵銷護胸臂角(-0.8 pivot + -0.18 joint),竿身回到垂直
   leftArm.end.add(staff);
+  /* 🏏 杖(שֵׁבֶט shebet)——短棒,握在**右手**。0827 使用者拍板「杖與竿都是武器」:
+       詩23:4「你的杖,你的竿,都安慰我」是兩件不同的東西 ——
+       **杖=打退野獸的防身武器**(也是權柄與管教),**竿=引導/攔阻/把羊鉤上來**。
+     ⚠ 原本它 `rig.add(rod)` 插在右腰上當純裝飾 ⇒ 真武器插腰、拿長鉤子去砸熊,經文上是反的。
+       現在掛到 `rightArm.end`,平時垂在身側(看起來仍像掛在腰邊),出手才掄起來。
+     ⚠ 角度同竿一律反推(rodPitch),不寫死補償常數。 */
   const rod = new THREE.Group();
   const rodShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.5, 7), woodMat);
   rodShaft.position.y = 0.25;
@@ -445,9 +477,8 @@ function makeShepherdTsum() {
   const rodKnob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), woodMat);
   rodKnob.position.y = 0.52;
   rod.add(rodKnob);
-  rod.position.set(0.4, 0.5, -0.14);
-  rod.rotation.z = -0.5;
-  rig.add(rod);
+  rod.position.set(0, -0.06, 0.04);
+  rightArm.end.add(rod);
 
   const shoeMat = tmat(0xb08a52, 0.85);
   const mkLeg = (x) => {
@@ -465,7 +496,9 @@ function makeShepherdTsum() {
   const leftLeg = mkLeg(-0.2);
   const rightLeg = mkLeg(0.2);
 
-  return { group, rig, head, waist: body, leftArm, rightArm, leftLeg, rightLeg, shirtMat: tunicMat, pantsMat: beltMat, smile: null };
+  return { group, rig, head, waist: body, leftArm, rightArm, leftLeg, rightLeg, shirtMat: tunicMat, pantsMat: beltMat, smile: null,
+           staff, staffTip: hook, rod, rodTip: rodKnob };
+           // 🪵🏏 0827:竿與杖都要被姿勢層掄起來,也要能被驗收量到「尖端世界座標」(打到沒打到用量的)
 }
 
 function makeDavidFigure() {
@@ -1301,7 +1334,7 @@ export class WarriorGame {
     }
     for (const f of this.foes) f.person.group.visible = true;
     this.phase = "gate";
-    this.message = "點畫面(或空白鍵/K)開戰!WASD 走位、J 輕拳、K 重拳(可蓄力放聖靈金光)。";
+    this.message = "點畫面(或空白鍵/K)開戰!WASD 走位、J 竿橫掃、K 竿重劈(可蓄力放聖靈金光)。";
     this.emitEvent("match-start", { mode: this.mode.label, loadout: BEAST_LOADOUTS[this.beastId].label });
     this.pushHud();
   }
@@ -1521,6 +1554,9 @@ export class WarriorGame {
         ),
         heading: this.my.heading, speed: 0, walkT: Math.random() * 3,
         barkT: 2.5 + Math.random() * 2.5, guard: false,   // 開場先「報到」吠一聲(0819:太久才吠=以為沒聲音)
+        // 🐕 參戰用:血量、咬/挨打冷卻、趴下計時、撲咬動畫計時
+        hp: DOG_COMBAT.hp, maxHp: DOG_COMBAT.hp,
+        biteCd: 0, hurtCd: 0, downT: -1, strikeT: 9,
       };
       person.group.position.set(d.pos.x, 0, d.pos.z);
       person.group.rotation.y = d.heading;
@@ -1569,6 +1605,26 @@ export class WarriorGame {
     }
 
     for (const d of this.dogs) {
+      d.biteCd = Math.max(0, d.biteCd - dt);
+      d.hurtCd = Math.max(0, d.hurtCd - dt);
+      d.strikeT += dt;
+      // 🐕 趴下休息中:不移動、不咬、不被再打;時間到自己爬起來(狗不會死)
+      if (d.downT >= 0) {
+        d.downT += dt;
+        if (d.downT >= DOG_COMBAT.downSec) {
+          d.downT = -1; d.hp = d.maxHp; d.guard = false;
+          this.message = `🐕 ${d.name}又站起來了!`;
+          this.emitEvent("dog-up", { name: d.name });
+          this.pushHud();
+        }
+        const gp = d.person.group;
+        gp.position.set(d.pos.x, 0.06, d.pos.z);
+        gp.rotation.y = d.heading;
+        gp.rotation.z = Math.PI * 0.42;              // 側躺(同野獸被制伏的表現:不流血)
+        d.person.legs.forEach((leg) => { leg.rotation.x = 0.5; });
+        continue;
+      }
+      d.person.group.rotation.z = 0;
       const wasGuard = d.guard;
       d.guard = d === guardDog;
       if (!d.guard) d._guardSaid = false;
@@ -1582,6 +1638,29 @@ export class WarriorGame {
         tz = threat.pos.z - (dz / L) * 1.5;
         faceAt = threat.pos;
         d.barkT -= dt * 4;                             // 站哨時吠得勤(≈每 3 秒)
+        /* 🐕 幫忙咬(0827)。⚠ 傷害走 `_handleKnockout` 同一條路,獸被咬倒才會正常收場;
+             自己扣血不呼叫它的話,獸血 0 卻永遠不倒下 —— 而且畫面上完全看不出哪裡壞了。 */
+        const dd2 = Math.hypot(threat.pos.x - d.pos.x, threat.pos.z - d.pos.z);
+        if (dd2 <= DOG_COMBAT.bite.reach && d.biteCd <= 0 && threat.koT < 0) {
+          d.biteCd = DOG_COMBAT.bite.cd;
+          d.strikeT = 0;
+          threat.hp = Math.max(0, threat.hp - DOG_COMBAT.bite.dmg);
+          this.emitEvent("dog-bite", { name: d.name, dmg: DOG_COMBAT.bite.dmg, beast: threat.type, foesHp: this.foesHpSummary() });
+          if (threat.hp <= 0) this._handleKnockout(threat, "dog");
+          this.pushHud();
+        }
+        // 🩸 站太近會被獸掃到(這就是「狗也該有血量」的那一半:牠會受傷,但不會死)
+        if (dd2 <= DOG_COMBAT.hurt.reach && d.hurtCd <= 0 && threat.koT < 0 && threat.strikeT < 0.3) {
+          d.hurtCd = DOG_COMBAT.hurt.cd;
+          d.hp = Math.max(0, d.hp - DOG_COMBAT.hurt.dmg);
+          this.emitEvent("dog-hurt", { name: d.name, hp: d.hp, maxHp: d.maxHp });
+          if (d.hp <= 0) {
+            d.downT = 0; d.guard = false; d._guardSaid = false;
+            this.message = `🐕 ${d.name}被撞倒了,趴著喘口氣——牠會再站起來的!`;
+            this.emitEvent("dog-down", { name: d.name });
+          }
+          this.pushHud();
+        }
       } else {
         const a = angle0 + d.phase + this._dogOrbitA;
         tx = cx + Math.sin(a) * orbitR;
@@ -1624,8 +1703,23 @@ export class WarriorGame {
       }
       d.walkT += dt * (1 + Math.abs(d.speed));
       const g = d.person.group;
-      g.position.set(d.pos.x, Math.abs(Math.sin(d.walkT * 7)) * Math.min(0.07, Math.abs(d.speed) * 0.05), d.pos.z);
+      /* 🐕 撲咬:身體往前躥一下 + 低頭。★ 判定=畫面 —— 傷害在 contact 那一刻結算,
+           動畫的最前點也在那一刻,不可以各寫各的(牧人的竿與杖就是踩過這個坑)。 */
+      let lungeF = 0, nose = 0;
+      if (d.strikeT < DOG_COMBAT.bite.dur) {
+        const k = clamp(d.strikeT / DOG_COMBAT.bite.contact, 0, 1);
+        const back = clamp((d.strikeT - DOG_COMBAT.bite.contact) / (DOG_COMBAT.bite.dur - DOG_COMBAT.bite.contact), 0, 1);
+        const f = d.strikeT <= DOG_COMBAT.bite.contact ? k : 1 - back;
+        lungeF = f * 0.55;
+        nose = -f * 0.42;
+      }
+      g.position.set(
+        d.pos.x + Math.sin(d.heading) * lungeF,
+        Math.abs(Math.sin(d.walkT * 7)) * Math.min(0.07, Math.abs(d.speed) * 0.05),
+        d.pos.z + Math.cos(d.heading) * lungeF,
+      );
       g.rotation.y = d.heading;
+      g.rotation.x = nose;
       d.person.legs.forEach((leg, li) => {
         leg.rotation.x = Math.sin(d.walkT * 7 + (li % 2 ? Math.PI : 0)) * Math.min(0.75, Math.abs(d.speed) * 0.42);
       });
@@ -1928,8 +2022,8 @@ export class WarriorGame {
       this._pendingStrikes.push({
         target,
         dmg: LIGHT_PUNCH.dmg,
-        opts: { who: "me", weapon: { label: "輕拳", short: "輕拳" }, stun: 0, attacker: f, kind: "melee", knockback: 0.1 },
-        t: 0.12,
+        opts: { who: "me", weapon: { label: "橫掃", short: "橫掃", moveId: "light" }, stun: 0, attacker: f, kind: "melee", knockback: 0.1 },
+        t: LIGHT_SWING.contact,   // ★ 與動畫共用同一份時間表,不寫死
       });
     } else {
       this.emitEvent("miss", { who: "me" });
@@ -1971,7 +2065,7 @@ export class WarriorGame {
       this._pendingStrikes.push({
         target,
         dmg: Math.round(dmg),
-        opts: { who: isPlayer ? "me" : "ai", weapon: { label: "重拳", short: "重拳" }, stun: 0, attacker: fighter, kind: "melee", knockback: 0.65 },
+        opts: { who: isPlayer ? "me" : "ai", weapon: { label: "重劈", short: "重劈", moveId: "heavy" }, stun: 0, attacker: fighter, kind: "melee", knockback: 0.65 },
         t: CONTACT_AT[w.swing] || 0.2,
       });
     } else {
@@ -2034,7 +2128,7 @@ export class WarriorGame {
       mesh: wave, vel: fwd.multiplyScalar(13), t: 0,
       dmg, stun: 0,
       who: fighter === this.my ? "me" : "ai",
-      weapon: { label: "聖靈金光", short: "金光" },
+      weapon: { label: "聖靈金光", short: "金光", moveId: "holy" },
       isWave: true, hitR: 1.6, life: 1.3,
       hitSet: new Set(), // 穿透:同一獸只結算一次,可連中多獸
     });
@@ -2099,7 +2193,7 @@ export class WarriorGame {
       }
       target.hp = Math.max(0, target.hp - reduced);
       this.lastHit = { who, dmg: reduced, weapon: weapon.short };
-      this.emitEvent("hit", { who, dmg: reduced, weapon: weapon.label, stun: false, myHp: this.my.hp, foesHp: this.foesHpSummary(), aiHp: this.totalFoesHp(), round: this.roundNo });
+      this.emitEvent("hit", { who, dmg: reduced, weapon: weapon.label, moveId: weapon.moveId || null, stun: false, myHp: this.my.hp, foesHp: this.foesHpSummary(), aiHp: this.totalFoesHp(), round: this.roundNo });
       this.message = `舉臂擋下大半——只受 -${reduced}`;
       if (target.hp <= 0) this._handleKnockout(target, who);
       this.pushHud();
@@ -2126,7 +2220,7 @@ export class WarriorGame {
     const isMe = who === "me";
     this.lastHit = { who, dmg, weapon: weapon.short };
     this.emitEvent("hit", {
-      who, dmg, weapon: weapon.label, stun: !!stun,
+      who, dmg, weapon: weapon.label, moveId: weapon.moveId || null, stun: !!stun,
       myHp: this.my.hp, foesHp: this.foesHpSummary(), aiHp: this.totalFoesHp(), round: this.roundNo,
       beast: target !== this.my ? target.type : (attacker && attacker !== this.my ? attacker.type : null),
     });
@@ -2914,47 +3008,100 @@ export class WarriorGame {
       }
     }
 
+    /* 🪵 攻擊一律由「持竿的左臂」帶動(0827 使用者退件:「J 與 K 動作上沒有差別,
+         都只是手裡的竿搖一下,沒有碰到獅子與熊,也沒有將竿高高舉起重重打下」)。
+       ★ 根因:竿掛在 `leftArm.end`,而舊的攻擊動畫**從頭到尾只動右臂**——而右手是空的。
+         右臂其實有分輕/重(重拳 armX 到 -3.05 =舉過頭),但玩家盯著的是**左手那根竿**
+         ⇒ 看到的只有「竿跟著身體晃一下」,兩個鍵長得一模一樣。
+       ★★ 這條 `3d-game-kit` **早就寫過**:「持拍/持械的攻擊手臂要真的掄動——
+         手臂做 pivot(臂+器械一體);**器械黏在身側自己轉=退件**(racket3d 實錄)」。
+         規則在、卻還是犯了 ⇒ 沉澱要做成**會攔下來的東西**,不是再寫一遍(見 silent-failure #36)。
+       ⇒ 現在:左臂掄竿、右手在戰鬥中併上去成雙手握;
+         **J=轉腰橫掃**(竿放平、腰帶著竿掃過身前)、**K=高舉過頭重重劈下**(蓄→砸,帶前踏)。
+         兩者差在**不同軸**(K 是俯仰、J 是水平轉腰),所以絕不可能看起來一樣。
+       ⚠ 竿角一律用「**想要的竿身角度**」反推,不要再寫死補償常數:
+         staffPitch = 左臂 pivot.x + 左臂 joint.x + staff.rotation.x
+         ⇒ staff.rotation.x = staffPitch - (lArmX + lArmJ)。
+         靜止時 0 - (-0.8 + -0.18) = 0.98,與原本那顆魔術常數相同(所以外觀不變)。 */
     const st = f.strikeT;
-    let armX = engaged ? -1.2 : -0.9;
-    let armJ = engaged ? -0.3 : -0.5;
-    let strikeLean = 0;
     const kind = f.strikeKind;
-    if (kind === "light" && st < 0.28) {
-      // 輕拳:快、短促的直拳
-      if (st < 0.1) {
-        const k = st / 0.1;
-        armX = -1.2 - k * 0.9;
-      } else if (st < 0.2) {
-        const k = (st - 0.1) / 0.1;
-        armX = -2.1 + k * 1.3;
-        strikeLean = k * 0.2;
-      } else {
-        const k = (st - 0.2) / 0.08;
-        armX = -0.8 - (1 - k) * 0.2;
-        strikeLean = 0.2 * (1 - k);
+    /* 🪵 左手=竿(מִשְׁעֶנֶת,長彎鉤):引導、支持、攔阻 ⇒ J 轉腰橫掃,把野獸推離羊群
+       🏏 右手=杖(שֵׁבֶט,短棒):打退野獸、權柄 ⇒ K 高高舉起、重重打下
+       ★ 兩招用**不同的手、不同的兵器、不同的軸**(J 水平轉腰 / K 垂直俯仰)
+         ⇒ 不可能再出現「兩個鍵看起來一樣」。 */
+    let lArmX = engaged ? -1.15 : -0.8;   // 左臂(持竿)
+    let lArmJ = -0.18;
+    let staffPitch = 0;                   // 竿身:0=直立,+=竿尖朝前下
+    let rArmX = engaged ? -1.2 : -0.9;    // 右臂(持杖)
+    let rArmJ = engaged ? -0.3 : -0.5;
+    let rArmZ = 0;
+    let rodPitch = engaged ? 2.3 : 2.75;  // 杖身:π≈3.14=杖尖朝正下(垂在身側);0=高舉朝天
+    let torsoTwist = 0;                   // 轉腰(J 橫掃看得出來的那一軸)
+    let strikeLean = 0;
+    let lunge = 0;                        // 接觸瞬間的前踏(只動 mesh,f.pos 不變)
+
+    if (kind === "light" && st < LIGHT_SWING.dur) {
+      // ── J 竿橫掃:竿放平,靠轉腰把竿掃過身前。快,回位也快
+      staffPitch = 1.32;                  // 竿身接近水平、竿尖朝前 ⇒ 掃到的是獸身不是空氣
+      lArmX = -1.05; lArmJ = -0.12;
+      if (st < 0.07) {                                        // 拉竿到右後
+        const k = st / 0.07;
+        torsoTwist = 0.62 * k;
+        staffPitch = 0.9 + 0.42 * k;
+      } else if (st < LIGHT_SWING.contact + 0.05) {           // 掃過去(接觸在中段)
+        const k = (st - 0.07) / (LIGHT_SWING.contact + 0.05 - 0.07);
+        torsoTwist = 0.62 - 1.34 * k;
+        strikeLean = 0.14 * Math.sin(k * Math.PI);
+        lunge = 0.16 * Math.sin(k * Math.PI);
+      } else {                                                // 收勢
+        const k = (st - LIGHT_SWING.contact - 0.05) / (LIGHT_SWING.dur - LIGHT_SWING.contact - 0.05);
+        torsoTwist = -0.72 * (1 - k);
+        staffPitch = 1.32 * (1 - k);
+        lArmX = -1.05 + (engaged ? -0.1 : 0.25) * k;
       }
-    } else if ((kind === "heavy" || kind === "holy") && st < 0.6) {
-      // 重拳/聖靈金光:180°舉過頭直劈式重拳,動作大、看得見打到身上
-      if (st < 0.14) {
-        const k = st / 0.14;
-        armX = -1.2 - k * 1.85;
-      } else if (st < 0.34) {
-        const k = (st - 0.14) / 0.2;
-        armX = -3.05 + k * 2.7;
-        armJ = -0.1 - k * 0.2;
-        strikeLean = k * (kind === "holy" ? 0.5 : 0.35);
-      } else {
-        const k = (st - 0.34) / 0.26;
-        armX = -0.35 - k * 0.85;
-        armJ = -0.3 + k * 0.15;
-        strikeLean = (kind === "holy" ? 0.5 : 0.35) * (1 - k);
+      rArmX = -1.0 + torsoTwist * 0.35;   // 右臂順著轉腰帶一下(杖仍垂著,不參與這一招)
+    } else if ((kind === "heavy" || kind === "holy") && st < HEAVY_SWING.dur) {
+      // ── K 杖重劈:抽出 → 高高舉起過頭 → 重重打下。慢、動作大、帶前踏
+      const holy = kind === "holy";
+      if (st < HEAVY_SWING.wind) {                            // 蓄:整條右臂把杖掄到頭頂後方
+        const k = st / HEAVY_SWING.wind;
+        rArmX = -1.2 - k * 1.7;
+        rArmJ = -0.3 + k * 0.22;
+        rodPitch = 2.3 - k * 2.85;                            // 杖尖:朝下 → 甩過前方 → 朝後上(蓄滿)
+        strikeLean = -0.16 * k;                               // 上身微微後仰=蓄勢
+      } else if (st < HEAVY_SWING.contact) {                  // 砸:一路劈到前下方
+        /* ⚠ 下劈**必須在 contact 那一刻到底**,不可以寫成 contact+0.04 ——
+           那樣傷害結算時杖還在半空(0827 首版就是這樣:量到杖尖離獸身 1.84m,
+           而畫面上「血掉了、棒子還沒下來」)。判定=畫面,時間表只有一份。 */
+        const k = (st - HEAVY_SWING.wind) / (HEAVY_SWING.contact - HEAVY_SWING.wind);
+        const e = k * k;                                      // 慢起快落=有重量感
+        rArmX = -2.9 + e * 2.5;
+        rArmJ = -0.08;
+        rodPitch = -0.55 + e * 2.15;                          // -0.55(舉過頭)→ +1.6(前下,打在獸身上)
+        strikeLean = -0.16 + e * (holy ? 0.66 : 0.51);
+        lunge = e * (holy ? 0.5 : 0.42);
+      } else {                                                // 收勢:杖慢慢垂回身側
+        const k = (st - HEAVY_SWING.contact) / (HEAVY_SWING.dur - HEAVY_SWING.contact);
+        rArmX = -0.4 - k * 0.8;
+        rArmJ = -0.08 - k * 0.22;
+        rodPitch = 1.6 + k * 0.7;
+        strikeLean = (holy ? 0.5 : 0.35) * (1 - k);
+        lunge = (holy ? 0.5 : 0.42) * (1 - k);
       }
+      lArmX = -1.05 - strikeLean * 0.3;   // 左臂把竿收到身側讓路,不要擋住劈下來的杖
+      staffPitch = -0.25;
     }
+    let armX = rArmX, armJ = rArmJ, armZ = rArmZ;
     // 蓄力(聖靈金光蓄勢):雙臂高舉發抖+腳下金圈亮起
     if (f.chargeT >= 0) {
       const c01 = clamp(f.chargeT / CHARGE_FULL, 0, 1);
-      armX = -2.3 + Math.sin(this.time * 26) * 0.07 * (0.5 + c01);
-      armJ = -0.1;
+      const tremble = Math.sin(this.time * 26) * 0.07 * (0.5 + c01);
+      // 🏏 蓄力=右手把【杖】高舉過頂發抖(聖靈金光是 K 蓄力放開,武器就是杖)。
+      //    原本只有空的右手在抖、兩件兵器都沒動 ⇒ 畫面上看不出在蓄力。
+      armX = -2.5 + tremble;
+      armJ = -0.06;
+      rodPitch = -0.6 + tremble * 0.6;
+      lArmX = -1.05; staffPitch = -0.25;   // 左手把竿收到身側讓路
       f.chargeRing.material.opacity = 0.25 + c01 * 0.6;
       f.chargeRing.scale.setScalar(0.8 + c01 * 1.0);
     } else {
@@ -2963,10 +3110,14 @@ export class WarriorGame {
     person.rightArm.pivot.rotation.order = "YXZ";
     person.rightArm.pivot.rotation.x = armX;
     person.rightArm.pivot.rotation.y = 0;
+    person.rightArm.pivot.rotation.z = armZ;
     person.rightArm.joint.rotation.x = armJ;
-    person.rig.rotation.y = 0;
+    // 🏏 杖角反推:rodPitch = 右臂 pivot.x + 右臂 joint.x + rod.rotation.x
+    if (person.rod) person.rod.rotation.x = rodPitch - (armX + armJ);
+    person.rig.rotation.y = torsoTwist;      // 🪵 轉腰=J 橫掃看得出來的那一軸
+    person.rig.position.z = lunge;           // 前踏:只動 mesh,f.pos 不變(物理與判定不受影響)
 
-    // 左臂:平時護胸;格擋=雙臂舉至身前(赤手防禦,無盾牌)
+    // 左臂:掄竿的那隻手;格擋=雙臂舉至身前(竿橫在胸前擋)
     if (f.blocking) {
       person.leftArm.pivot.rotation.x = -1.55;
       person.leftArm.pivot.rotation.z = -0.25;
@@ -2974,10 +3125,16 @@ export class WarriorGame {
       person.rightArm.pivot.rotation.x = -1.4;
       person.rightArm.pivot.rotation.z = 0.25;
       person.rightArm.joint.rotation.x = -0.3;
+      person.rig.rotation.y = 0;
+      person.rig.position.z = 0;
+      if (person.staff) person.staff.rotation.x = 1.35 - (-1.55 + -0.35);  // 竿橫過胸前擋
+      if (person.rod) person.rod.rotation.x = 1.9 - (-1.4 + -0.3);          // 杖也橫過來一起擋
     } else {
-      person.leftArm.pivot.rotation.x = engaged ? -1.0 : -0.8;
+      person.leftArm.pivot.rotation.x = lArmX;
       person.leftArm.pivot.rotation.z = 0.35;
-      person.leftArm.joint.rotation.x = -0.18;
+      person.leftArm.joint.rotation.x = lArmJ;
+      // 🪵 竿角反推:staffPitch = lArmX + lArmJ + staff.rotation.x(靜止時得 0.98 =原本那顆魔術常數)
+      if (person.staff) person.staff.rotation.x = staffPitch - (lArmX + lArmJ);
     }
 
     const stunned = f.stunT < this._stunDur();
@@ -3136,6 +3293,8 @@ export class WarriorGame {
       myHp: this.my.hp,
       aiHp: this.totalFoesHp(),
       foes: this.foesHpSummary(),
+      // 🐕 狗的血量要進 HUD:牠會受傷趴下,玩家看不到血量就不知道發生什麼事
+      dogs: (this.dogs || []).map((d) => ({ name: d.name, hp: d.hp, maxHp: d.maxHp, down: d.downT >= 0 })),
       maxHp: this.my.maxHp || 100,
       loadoutLabel: BEAST_LOADOUTS[this.beastId].label,
       roundNo: this.roundNo,

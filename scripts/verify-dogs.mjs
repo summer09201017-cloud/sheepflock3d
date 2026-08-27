@@ -2,7 +2,11 @@
  *
  * 驗六件:①漫遊有兩隻狗(忠忠/勇勇,模型齊件)②繞行:相位差 π+繞角有在前進
  * ③跟隊:狗不脫隊(離牧人 ≤ 橢圓半徑+餘裕)④戰鬥:野獸靠近 → 一隻狗站哨、擋位在獸與羊群之間
- * ⑤守護不攻擊:站哨期間野獸血量不因狗掉(神學鐵則=傷害數值零變動)⑥零 pageerror。
+ * ⑤⚠ 0827 使用者拍板改寫:狗**會幫忙咬**獸(原本斷言「獸血量零變動」,現在斷言相反)。
+ *   同時驗「狗有血量、會受傷、但**不會死**」——血歸零=趴下休息,downSec 後自己站起來。
+ *   ★ 神學鐵則沒有被放寬:那條管的是**羊**(只支援、不攻擊、永遠不會死),狗不在裡面。
+ *   ★ 咬的傷害刻意很低(獸血 4%/口 + 1.35s 冷卻):狗是幫忙,得勝仍歸耶和華(撒上17:37)。
+ * ⑥零 pageerror。
  *
  * 用法:npm run build && npx vite preview --port 4321 之後
  *   node scripts/verify-dogs.mjs [port]     # 預設 4321
@@ -101,14 +105,26 @@ try {
     const vDog = Math.atan2(gd.pos.x - cx, gd.pos.z - cz);
     let dAng = Math.abs(vFoe - vDog) % (Math.PI * 2);
     if (dAng > Math.PI) dAng = Math.PI * 2 - dAng;
-    await new Promise((r) => setTimeout(r, 2500));   // 站哨一陣子,看獸血有沒有被狗扣
-    return { assigned: true, name: gd.name, dFoe, dAng, hpDelta: hp0 - g.livingFoes()[0]?.hp };
+    await new Promise((r) => setTimeout(r, 4000));   // 站哨一陣子,看狗有沒有咬到獸
+    const dog = (g.dogs || []).find((d) => d.name === gd.name);
+    return {
+      assigned: true, name: gd.name, dFoe, dAng,
+      hpDelta: hp0 - g.livingFoes()[0]?.hp,
+      dogHp: dog?.hp, dogMaxHp: dog?.maxHp, dogDown: (dog?.downT ?? -1) >= 0,
+      hasHpField: typeof dog?.hp === "number" && typeof dog?.maxHp === "number",
+      allAlive: (g.dogs || []).every((d) => d.hp !== undefined),   // 沒有「死亡」欄位,只有趴下
+    };
   });
   ok("有狗站哨且就位(離獸 <3.2m)", guard.assigned && guard.dFoe < 3.2, guard.assigned ? `${guard.name} 離獸 ${guard.dFoe.toFixed(1)}m` : "沒有狗接哨");
   ok("擋位在獸與羊群之間(夾角 <40°)", guard.assigned && guard.dAng < 0.7, `夾角=${(guard.dAng * 57.3).toFixed(0)}°`);
 
-  console.log("⑤ 守護不攻擊:站哨期間獸血量不因狗掉(玩家沒出手)");
-  ok("獸血量零變動", guard.assigned && Math.abs(guard.hpDelta || 0) < 0.01, `Δhp=${guard.hpDelta}`);
+  console.log("⑤ 狗會幫忙咬(0827 改寫;玩家全程沒出手)+ 狗有血量、不會死");
+  ok("站哨期間獸血量有因狗下降", guard.assigned && (guard.hpDelta || 0) > 0, `Δhp=${guard.hpDelta}`);
+  ok("咬的傷害是「幫忙」不是「主力」(4 秒內 <= 獸血的 20%)",
+     guard.assigned && (guard.hpDelta || 0) <= 20, `Δhp=${guard.hpDelta}`);
+  ok("狗有血量欄位(hp/maxHp)", !!guard.hasHpField, `hp=${guard.dogHp}/${guard.dogMaxHp}`);
+  ok("狗不會死:血量歸零只會趴下(hp>=0 且仍在 dogs 名單裡)",
+     guard.assigned && guard.dogHp >= 0 && guard.allAlive, `hp=${guard.dogHp} down=${guard.dogDown}`);
 
   console.log("⑥ 沒有 console error");
   ok("零 console error", errors.length === 0, errors.slice(0, 3).join(" | "));

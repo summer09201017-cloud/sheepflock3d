@@ -1,4 +1,4 @@
-// 參孫打獅子:J=輕拳(快、傷害低)、K/Space=重拳(可蓄力放開=聖靈金光)、C=格擋。
+// 牧人打獅熊:J=竿橫掃(快、傷害低)、K/Space=竿重劈(可蓄力放開=聖靈金光)、C=格擋。
 const KEY_BINDINGS = {
   KeyW: "up",
   ArrowUp: "up",

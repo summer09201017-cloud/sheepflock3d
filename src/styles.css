@@ -113,6 +113,14 @@ body::before {
   color: var(--away-soft);
 }
 
+/* 🐕 牧羊犬血量卡(0827)。字級比敵我兩張小一階:它是輔助資訊,
+   不可以跟「牧人血量/野獸血量」搶那一眼(投影在教室前面時,最重要的兩個數字要先被看到)。 */
+.team-dogs strong {
+  color: #ffd98a;
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+}
+
 .score-label,
 .mini-label,
 .eyebrow,
