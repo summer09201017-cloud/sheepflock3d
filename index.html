@@ -301,6 +301,31 @@
     </div>
 
     <!-- 🐑 羊圈圖鑑(蒐集牆+伴行/出戰選擇+匯出匯入=跨站 B 案接口) -->
+    <!-- 🗓 走路足跡(0827):熱圖 + 統計 + 月報卡 + 可攜的匯出/匯入。
+         ⚠ 步數**不在羊圈匯出鏈裡**(那份是跨站共用的沙盒格式,而且它的隱私註解
+            明確寫著不寫地點/經緯度)⇒ 足跡自己有一份文字格式。 -->
+    <div class="sheep-modal" id="stepModal" hidden>
+      <div class="sheep-modal-panel">
+        <div class="sheep-modal-head">
+          <strong>🚶 走路足跡</strong>
+          <button id="stepIoBtn" type="button">📤 換手機/搬足跡</button>
+          <button id="stepCardBtn" type="button">🖼 月報卡</button>
+          <button id="stepCloseButton" type="button" class="primary">關閉</button>
+        </div>
+        <p class="dex-hint" id="stepStats"></p>
+        <canvas id="stepHeat" style="display:block;margin:8px auto;max-width:100%;image-rendering:pixelated"></canvas>
+        <p class="dex-hint">近半年每天走的步數,顏色越亮=走得越多。</p>
+        <p class="dex-hint">⚠ 網頁拿不到手機系統的計步器,這是用動作感測自己數的,<b>會比系統計步器少</b>;切到背景或鎖屏不會計;從 LINE 點進來拿不到感測器(要用外部瀏覽器開啟)。</p>
+        <div id="stepIoBox" hidden>
+          <p class="dex-hint">複製到另一台手機(或尋羊記)的同一個框按「📥 匯入」。<b>合併時每天取大值、不相加</b>。</p>
+          <textarea id="stepIoText" style="width:100%;height:100px;font-size:12px"></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px"><button id="stepIoIn" type="button">📥 匯入</button></div>
+        </div>
+        <canvas id="stepCardCv" hidden style="width:min(300px,70vw);border-radius:12px;margin:10px auto;display:block"></canvas>
+        <div id="stepCardBtns" hidden style="display:flex;gap:8px;justify-content:center"><button id="stepCardSave" type="button">⬇ 下載</button></div>
+      </div>
+    </div>
+
     <div class="sheep-modal" id="dexModal" hidden>
       <div class="sheep-modal-panel">
         <div class="sheep-modal-head">

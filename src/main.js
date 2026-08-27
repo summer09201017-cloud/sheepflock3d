@@ -21,6 +21,18 @@ const ui = {
   stepCard: document.querySelector("#stepCard"),
   stepLabel: document.querySelector("#stepLabel"),
   stepButton: document.querySelector("#stepButton"),
+  stepModal: document.querySelector("#stepModal"),
+  stepStats: document.querySelector("#stepStats"),
+  stepHeat: document.querySelector("#stepHeat"),
+  stepCloseButton: document.querySelector("#stepCloseButton"),
+  stepCardBtn: document.querySelector("#stepCardBtn"),
+  stepCardCv: document.querySelector("#stepCardCv"),
+  stepCardBtns: document.querySelector("#stepCardBtns"),
+  stepCardSave: document.querySelector("#stepCardSave"),
+  stepIoBtn: document.querySelector("#stepIoBtn"),
+  stepIoBox: document.querySelector("#stepIoBox"),
+  stepIoText: document.querySelector("#stepIoText"),
+  stepIoIn: document.querySelector("#stepIoIn"),
   dogScoreLabel: document.querySelector("#dogScoreLabel"),
   modeCode: document.querySelector("#modeCode"),
   passLabel: document.querySelector("#passLabel"),
@@ -606,20 +618,101 @@ function initPedometer() {
   ped = P.create({
     load: () => loadSettings().steps || null,
     save: (st) => saveSettings({ steps: st }),
-    onChange: paintSteps,
+    onChange: (st) => { paintSteps(st); checkStepMilestone(st); },
   });
   paintSteps(ped.stats());
   return ped;
 }
+/* 🏆 步數里程碑:走到台階 → 金句 + 旁白(本站沒有彩帶面板,用既有的播報條)。
+   ★ 蓋章記在 settings.stepMiles,跟遊戲進度分開。
+   ★ 用 milestoneDue(>= 比對)而不是等號:步數一次跳好幾步,等號會靜靜跳過台階。 */
+function checkStepMilestone(st) {
+  const P = globalThis.Pedometer;
+  if (!P) return;
+  const done = loadSettings().stepMiles || {};
+  const m = P.milestoneDue(st.total, done);
+  if (!m) return;
+  done[m.n] = Date.now();
+  saveSettings({ stepMiles: done });
+  pushCommentary(`🏆 ${m.n.toLocaleString()} 步了!${m.word}`, "hot", null);
+  pushCommentary(m.verse, "hot", null);
+}
+
+const HEAT = ["#1b3a2e", "#2f6b4a", "#48956a", "#6cc189", "#a7ecb6"];
+function drawFootprint() {
+  const P = globalThis.Pedometer;
+  if (!P || !ped) return;
+  const state = ped._state();
+  const st = ped.stats();
+  const hm = P.heatmap(state, 182);
+  const cv = ui.stepHeat;
+  const CELL = 12, GAP = 3, PAD = 4;
+  cv.width = hm.weeks.length * (CELL + GAP) + PAD * 2;
+  cv.height = 7 * (CELL + GAP) + PAD * 2;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  hm.weeks.forEach((week, w) => week.forEach((c, d) => {
+    if (!c) return;
+    g.fillStyle = HEAT[c.level];
+    g.fillRect(PAD + w * (CELL + GAP), PAD + d * (CELL + GAP), CELL, CELL);
+  }));
+  const nx = P.nextMilestone(st.total);
+  ui.stepStats.innerHTML =
+    `今天 <b>${st.today.toLocaleString()}</b> 步・近 7 天 <b>${st.week.toLocaleString()}</b>`
+    + `・本月 <b>${P.rangeTotal(state, 1).toLocaleString()}</b>`
+    + `・近 12 月 <b>${P.rangeTotal(state, 12).toLocaleString()}</b>`
+    + `<br>累計 <b>${st.total.toLocaleString()}</b> 步・連續 <b>${st.streak}</b> 天`
+    + (nx ? `<br>🏆 還差 <b>${nx.remain.toLocaleString()}</b> 步解鎖下一段金句(${nx.m.ref})` : "<br>🎊 六段金句全部解鎖了!")
+    + (st.mode === "gps" ? "<br>目前用 GPS 位移估算(拿不到動作感測)" : "");
+}
+function openStepPanel() {
+  if (!initPedometer()) return;
+  drawFootprint();
+  ui.stepModal.hidden = false;
+}
+ui.stepCloseButton?.addEventListener("click", () => { ui.stepModal.hidden = true; });
+ui.stepCard?.addEventListener("click", openStepPanel);
+ui.stepCardBtn?.addEventListener("click", () => {
+  const P = globalThis.Pedometer;
+  P.drawMonthCard(ui.stepCardCv, { state: ped._state(), title: "🚶 牧羊人與羊群・走路足跡" });
+  ui.stepCardCv.hidden = false;
+  ui.stepCardBtns.hidden = false;
+});
+ui.stepCardSave?.addEventListener("click", () => {
+  ui.stepCardCv.toBlob((b) => {
+    if (!b) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = `走路足跡-${globalThis.Pedometer.todayKey(Date.now())}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, "image/png");
+});
+ui.stepIoBtn?.addEventListener("click", () => {
+  if (!initPedometer()) return;
+  ui.stepIoText.value = globalThis.Pedometer.exportText(ped._state());
+  ui.stepIoBox.hidden = false;
+});
+/* ⚠ 訊息講「發生了什麼」:匯入 0 天與檔案壞掉是兩件事,都說「完成」就是無聲失敗
+   (importText 刻意用 -1 區分)。 */
+ui.stepIoIn?.addEventListener("click", () => {
+  if (!initPedometer()) return;
+  const n = globalThis.Pedometer.importText(ped._state(), ui.stepIoText.value);
+  if (n < 0) { pushCommentary("這段文字看不懂——請確認整段都複製到了。", "cool", null); return; }
+  saveSettings({ steps: ped._state() });
+  drawFootprint();
+  paintSteps(ped.stats());
+  pushCommentary(n === 0 ? "這份足跡本來就都有了,沒有新的一天。" : `📥 合併了 ${n} 天的足跡。`, "hot", null);
+});
+
 if (ui.stepButton) {
   ui.stepButton.addEventListener("click", () => {
     const p = initPedometer();
     if (!p) { pushCommentary("🚶 計步元件沒載到,請重新整理一次。", "cool", null); return; }
-    if (p.isRunning()) {
-      const st = p.stats();
-      pushCommentary(`🚶 今天 ${st.today} 步・近 7 天 ${st.week}・累計 ${st.total}・連續 ${st.streak} 天`, "hot", null);
-      return;
-    }
+    /* 已經在計步 → 這顆鈕改成「打開足跡面板」。
+       ⚠ 不要只靠點 HUD 上那張步數卡:412px 手機寬度下側欄會蓋住它,實測 click 根本點不到
+         (驗收腳本首跑就是被 .side-panel 攔下來的)。側欄裡的鈕才是手機上真的按得到的入口。 */
+    if (p.isRunning()) { openStepPanel(); return; }
     const inApp = p.inAppBrowser();
     p.start().then((r) => {
       paintSteps(p.stats());

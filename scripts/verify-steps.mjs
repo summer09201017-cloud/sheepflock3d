@@ -96,6 +96,71 @@ await sleep(1000);
 const after = await page.evaluate(() => Number(document.getElementById("stepLabel")?.textContent || 0));
 ok(`重新載入後 ${after} 步`, after >= 80, `after=${after}`);
 
+console.log("⑥ 步數里程碑 + 足跡面板(熱圖 / 月報卡 / 可攜匯出)");
+{
+  /* ⚠ 上一項 reload 過 ⇒ 現在人在首頁,而首頁會蓋住步數卡(click 會一直重試到 timeout)。
+     那是**測試沒進到遊戲**,不是功能壞了 —— 首跑就是這樣紅的。要先重新進場。 */
+  await page.locator('.mode-card[data-mode="seek"]').click();
+  await page.selectOption("#realMapSelect", "off").catch(() => {});
+  await page.locator("#startMatchButton").click();
+  await page.waitForFunction(() => window.__game && window.__game.phase === "battle", null, { timeout: 15000 });
+  await page.locator("#stepButton").click();
+  await sleep(400);
+
+  // 推到 1200 步跨過 1000 台階,驗它真的給金句(用 >= 比對,一次跳好幾步不可以漏)
+  const due = await page.evaluate(() => {
+    const P = globalThis.Pedometer;
+    return P.milestoneDue(1200, {}) ? P.milestoneDue(1200, {}).ref : null;
+  });
+  ok(`1200 步該給 1000 台階(${due})`, due === "詩 23:3", String(due));
+
+  /* 從**側欄的鈕**打開(已在計步時那顆鈕就是入口)。
+     ⚠ 不要點 HUD 上那張步數卡:412px 下側欄會蓋住它 —— 那是真的可用性問題,
+       首跑被 .side-panel intercepts pointer events 攔下來才發現的。 */
+  await page.locator("#stepButton").click();
+  await sleep(400);
+  ok("側欄按鈕打開足跡面板", await page.locator("#stepModal").isVisible());
+
+  const heat = await page.evaluate(() => {
+    const cv = document.querySelector("#stepHeat");
+    const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    let painted = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) painted++;
+    return { painted, stats: document.querySelector("#stepStats").textContent };
+  });
+  // 「畫得出來」要用像素證明,不是看 canvas 存不存在
+  ok(`熱圖有畫上像素(${heat.painted})`, heat.painted > 100, String(heat.painted));
+  ok("統計有本月/近12月/連續", /本月/.test(heat.stats) && /近 12 月/.test(heat.stats) && /連續/.test(heat.stats), heat.stats.slice(0, 60));
+
+  await page.locator("#stepCardBtn").click();
+  await sleep(500);
+  const card = await page.evaluate(() => {
+    const cv = document.querySelector("#stepCardCv");
+    const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    let painted = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) painted++;
+    return { w: cv.width, h: cv.height, painted };
+  });
+  ok(`月報卡畫出來了(${card.w}x${card.h})`, card.w === 900 && card.h > 800 && card.painted > 10000, JSON.stringify(card));
+
+  /* 📤 可攜匯出:步數**不在羊圈匯出鏈裡**(0827 訂正——原本以為跟著走,其實沒有),
+     所以它自己這份格式是「換手機不掉資料」的唯一保障,一定要驗。 */
+  await page.locator("#stepIoBtn").click();
+  await sleep(250);
+  const io = await page.evaluate(() => {
+    const t = document.querySelector("#stepIoText").value;
+    const P = globalThis.Pedometer;
+    const fresh = P.normalize(null);
+    const merged = P.importText(fresh, t);
+    const bad = P.importText(fresh, "亂打的");
+    return { tag: JSON.parse(t).t, merged, bad, days: Object.keys(fresh.days).length };
+  });
+  ok(`匯出格式標籤正確(${io.tag})`, io.tag === "hfpc-steps-v1", String(io.tag));
+  ok(`匯出的文字能被匯回來(${io.merged} 天)`, io.merged >= 1, String(io.merged));
+  ok("壞檔案回 -1 不是 0(匯入 0 天與檔案壞掉是兩件事)", io.bad === -1, String(io.bad));
+}
+
+
 ok("⑤ 零 pageerror / console.error", errors.length === 0, errors.slice(0, 3).join(" | "));
 
 await browser.close();
