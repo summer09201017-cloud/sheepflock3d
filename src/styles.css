@@ -113,6 +113,12 @@ body::before {
   color: var(--away-soft);
 }
 
+/* 🚶 計步卡:同狗卡,字級小一階(它是輔助資訊,不跟牧人/野獸血量搶那一眼) */
+.team-steps strong {
+  color: #a7e0ff;
+  font-size: 1.45rem;
+}
+
 /* 🐕 牧羊犬血量卡(0827)。字級比敵我兩張小一階:它是輔助資訊,
    不可以跟「牧人血量/野獸血量」搶那一眼(投影在教室前面時,最重要的兩個數字要先被看到)。 */
 .team-dogs strong {

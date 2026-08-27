@@ -4,6 +4,11 @@ import { AudioManager } from "./audio.js";
 import { speakLine, setVoiceEnabled, playBleat } from "./voice.js";
 import { PHRASES, SCRIPTURES, FLOCK_SCRIPTURES } from "./voicePhrases.js";
 import { hasSavedGame, loadSettings, saveSettings } from "./storage.js";
+/* 🚶 計步(皮克敏式)。★ 這支是**垂直搬運的複本**,正本 = skill step-pedometer/assets/pedometer.js
+   —— 請勿就地改;三份(正本 / 尋羊記 / 本站)md5 必須逐位元相同(同 sheepdex.js 的規矩)。
+   ⚠ 它是 UMD、不是 ES module ⇒ import 之後從全域取,而且**取不到要吵**
+   (bundler-global-guard #37:靜靜拿到 undefined 是這族最難查的病)。 */
+import "./pedometer.js";
 import { landmarksDebug, normalizeOverpass } from "./landmarks.js";
 import { GIFTS, NAME_POOL, loadDex, saveDex, addSheepToDex, drawSheepPortrait, exportDexText, importDexText, SQUAD_MAX, FOLLOW_MAX, createSheepShowcase } from "./flock.js";
 
@@ -13,6 +18,9 @@ const ui = {
   myScoreLabel: document.querySelector("#myScoreLabel"),
   aiScoreLabel: document.querySelector("#aiScoreLabel"),
   dogCard: document.querySelector("#dogCard"),
+  stepCard: document.querySelector("#stepCard"),
+  stepLabel: document.querySelector("#stepLabel"),
+  stepButton: document.querySelector("#stepButton"),
   dogScoreLabel: document.querySelector("#dogScoreLabel"),
   modeCode: document.querySelector("#modeCode"),
   passLabel: document.querySelector("#passLabel"),
@@ -566,6 +574,69 @@ function openDex() {
 }
 ui.dexButton.addEventListener("click", openDex);
 ui.dexButtonGame.addEventListener("click", openDex);   // 遊戲中(側欄)
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   🚶 計步(皮克敏式)—— 0827 使用者點名「sheepflock3d 與尋羊記,要跟皮克敏一樣能計步」
+   ══════════════════════════════════════════════════════════════════════════════
+   ⚠⚠ 三個前提要對使用者講清楚,不可以裝作跟皮克敏一樣準:
+     ① **web 沒有計步 API**:手機系統的計步器(HealthKit / Google Fit)網頁拿不到,
+        這裡是用 devicemotion 的加速度自己數峰值 ⇒ 一定比系統計步器少。
+     ② **切到背景 / 鎖屏就不再收到感測事件** ⇒ 把手機收起來走路不會被算到。
+        皮克敏是原生 App 拿得到系統計步器,網頁做不到 —— 平台限制,不是 bug。
+     ③ **從 LINE 點進來拿不到感測器**,而且使用者在手機設定裡怎麼調都沒用
+        ⇒ 唯一的路是「用外部瀏覽器開啟」(見 skill in-app-browser-guard)。
+     ⇒ 拿不到動作感測就退回「GPS 位移 ÷ 步幅」估算,並在畫面上標明是**估算**。
+   ★ 存在既有的 settings 裡(saveSettings 是**先讀再蓋**的安全部分寫入,見 storage.js 0812 那條)
+     ⇒ 不新開 localStorage 鍵。★ 但步數是**使用者資料**不是裝置偏好:
+     哪天本站加了匯出/匯入,steps 一定要一起進去(backup-chain-guard #42 抓的正是這種漏接)。 */
+let ped = null;
+function paintSteps(st) {
+  if (!ui.stepCard) return;
+  ui.stepCard.hidden = false;
+  ui.stepLabel.textContent = String(st.today);
+  ui.stepCard.title = `今天 ${st.today} 步${st.mode === "gps" ? "(GPS 估算)" : ""}`
+    + `・近 7 天 ${st.week}・累計 ${st.total}・連續 ${st.streak} 天`;
+}
+function initPedometer() {
+  if (ped) return ped;
+  const P = globalThis.Pedometer;
+  /* ⚠ 取不到要吵,不可以靜靜當作沒這功能 —— UMD 掛全域失敗是這族最難查的病
+     (bundler-global-guard #37:build 綠、HTTP 200、頁面畫得出來,只有這個功能沒反應)。 */
+  if (!P) { console.error("[steps] window.Pedometer 沒掛上 —— pedometer.js 沒載到或 UMD 掛全域壞了"); return null; }
+  ped = P.create({
+    load: () => loadSettings().steps || null,
+    save: (st) => saveSettings({ steps: st }),
+    onChange: paintSteps,
+  });
+  paintSteps(ped.stats());
+  return ped;
+}
+if (ui.stepButton) {
+  ui.stepButton.addEventListener("click", () => {
+    const p = initPedometer();
+    if (!p) { pushCommentary("🚶 計步元件沒載到,請重新整理一次。", "cool", null); return; }
+    if (p.isRunning()) {
+      const st = p.stats();
+      pushCommentary(`🚶 今天 ${st.today} 步・近 7 天 ${st.week}・累計 ${st.total}・連續 ${st.streak} 天`, "hot", null);
+      return;
+    }
+    const inApp = p.inAppBrowser();
+    p.start().then((r) => {
+      paintSteps(p.stats());
+      if (r.mode === "motion") {
+        ui.stepButton.textContent = "🚶 計步中";
+        pushCommentary("🚶 開始計步了!走路時把畫面留著——切到背景或鎖屏就不會計(網頁拿不到系統計步器)。", "hot", null);
+      } else if (inApp || String(r.reason || "").indexOf("inapp-") === 0) {
+        pushCommentary(`🚶 你是從 ${inApp || "App 內建瀏覽器"} 點進來的,那裡拿不到動作感測(在手機設定裡調也沒用)。先用 GPS 位移估算;想準一點請用「在瀏覽器開啟」。`, "cool", null);
+      } else if (r.reason === "denied") {
+        pushCommentary("🚶 動作感測被拒絕了,先用 GPS 位移估算。要改的話到手機設定把這個網站的「動作與方向」打開。", "cool", null);
+      } else {
+        pushCommentary("🚶 這台裝置沒有動作感測,先用 GPS 位移估算(標明是估算,不會假裝準)。", "cool", null);
+      }
+    });
+  });
+  initPedometer();   // 開場先把上次的步數畫出來(不啟動感測、不要授權——那要等使用者按鈕)
+}
 ui.dexFab.addEventListener("click", openDex);          // 遊戲中(畫面左上,手機也按得到)
 window.addEventListener("keydown", (e) => {            // 快捷鍵 B
   if (e.key !== "b" && e.key !== "B") return;
@@ -786,6 +857,8 @@ function startRealWalkWatch() {
   realWalkWatchId = navigator.geolocation.watchPosition(
     (p) => {
       const r = game.feedRealWalk(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
+      // 🚶 GPS 軌:motion 可用時 addGpsFix 自己回 0(兩軌不相加,否則 double count)
+      if (ped) ped.addGpsFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy, Date.now());
       /* 訊號爛要講,不能讓人以為遊戲壞了(牧人原地不動的原因是精度閘門在擋)。30 秒最多唸一次。 */
       if (r && r.ok === false && r.reason === "acc" && Date.now() - realWalkAccWarnAt > 30000) {
         realWalkAccWarnAt = Date.now();

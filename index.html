@@ -39,6 +39,11 @@
             <span class="stack-subtext" id="phaseLabel">主選單</span>
           </div>
         </div>
+        <!-- 🚶 計步(皮克敏式)。按下才出現:iOS 的動作感測授權只認使用者手勢 -->
+        <div class="score-card team-steps" id="stepCard" hidden>
+          <span class="score-label">🚶 今天</span>
+          <strong id="stepLabel">0</strong>
+        </div>
         <!-- 🐕 牧羊犬血量(0827:狗會幫忙咬獸,也會受傷 ⇒ 血量要看得見,不然玩家不知道牠怎麼趴下了) -->
         <div class="score-card team-dogs" id="dogCard" hidden>
           <span class="score-label">🐕 牧羊犬</span>
@@ -120,6 +125,8 @@
           <button id="zoomOutButton" aria-label="鏡頭拉遠，一次看到更多地圖與羊">🔍－拉遠</button>
           <button id="zoomInButton" aria-label="鏡頭拉近">🔍＋拉近</button>
           <button id="dexButtonGame">🐑 我的羊圈</button>
+          <!-- 🚶 計步:必須是使用者手勢(iOS 的 DeviceMotionEvent.requestPermission 只認手勢) -->
+          <button id="stepButton" title="開始計步(像皮克敏一樣記錄走了幾步)。⚠ 網頁拿不到手機系統的計步器,是用動作感測自己數的,會比系統計步器少;切到背景或鎖屏時不會計">🚶 開始計步</button>
         </div>
 
         <div class="panel-block">
