@@ -21,6 +21,7 @@ const ui = {
   stepCard: document.querySelector("#stepCard"),
   stepLabel: document.querySelector("#stepLabel"),
   stepButton: document.querySelector("#stepButton"),
+  fullscreenButton: document.querySelector("#fullscreenButton"),
   stepModal: document.querySelector("#stepModal"),
   stepStats: document.querySelector("#stepStats"),
   stepHeat: document.querySelector("#stepHeat"),
@@ -586,6 +587,36 @@ function openDex() {
 }
 ui.dexButton.addEventListener("click", openDex);
 ui.dexButtonGame.addEventListener("click", openDex);   // 遊戲中(側欄)
+
+/* ⛶ 全螢幕(0827 使用者:「尋羊記與 sheepflock3D 都要有手機版全螢幕」)。
+   ★ 一定要在使用者手勢裡呼叫(瀏覽器規定)。
+   ⚠ iOS Safari 的一般元素**不支援** requestFullscreen ⇒ 那裡按了會什麼都沒有。
+     不能靜靜沒反應 —— 要明講「請用加入主畫面以 PWA 開」,那才是 iOS 上的全螢幕解。
+   ⚠ 進出全螢幕都要讓 renderer 重新量尺寸,不然畫布停在舊高度(黑邊或被切掉)。 */
+if (ui.fullscreenButton) {
+  ui.fullscreenButton.addEventListener("click", async () => {
+    const el = document.documentElement;
+    const cur = document.fullscreenElement || document.webkitFullscreenElement;
+    try {
+      if (cur) { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!req) {
+        pushCommentary("這台裝置的瀏覽器不給網頁全螢幕(iPhone 的 Safari 就是這樣)——請用「加入主畫面」開,那樣就是全螢幕了。", "cool", null);
+        return;
+      }
+      await req.call(el);
+    } catch {
+      pushCommentary("這台裝置不給全螢幕——可以改用「加入主畫面」。", "cool", null);
+    }
+  });
+  for (const ev of ["fullscreenchange", "webkitfullscreenchange"]) {
+    document.addEventListener(ev, () => {
+      const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      ui.fullscreenButton.textContent = on ? "⛶ 離開全螢幕" : "⛶ 全螢幕";
+      setTimeout(() => { try { game.resize && game.resize(); } catch {} window.dispatchEvent(new Event("resize")); }, 120);
+    });
+  }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════
    🚶 計步(皮克敏式)—— 0827 使用者點名「sheepflock3d 與尋羊記,要跟皮克敏一樣能計步」

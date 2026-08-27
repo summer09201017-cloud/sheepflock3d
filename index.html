@@ -126,6 +126,10 @@
           <button id="zoomInButton" aria-label="鏡頭拉近">🔍＋拉近</button>
           <button id="dexButtonGame">🐑 我的羊圈</button>
           <!-- 🚶 計步:必須是使用者手勢(iOS 的 DeviceMotionEvent.requestPermission 只認手勢) -->
+          <!-- ⛶ 手機全螢幕(0827 使用者點名兩站都要):把瀏覽器網址列收起來。
+               ⚠ iOS Safari 的一般元素不支援 requestFullscreen —— 那裡拿不到是平台限制,
+                  要真全螢幕只能「加入主畫面」以 PWA 開(本站首頁已有安裝指引)。 -->
+          <button id="fullscreenButton" title="全螢幕(把瀏覽器網址列收起來)">⛶ 全螢幕</button>
           <button id="stepButton" title="開始計步(像皮克敏一樣記錄走了幾步)。⚠ 網頁拿不到手機系統的計步器,是用動作感測自己數的,會比系統計步器少;切到背景或鎖屏時不會計">🚶 開始計步</button>
         </div>
 

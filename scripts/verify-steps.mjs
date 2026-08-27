@@ -96,6 +96,16 @@ await sleep(1000);
 const after = await page.evaluate(() => Number(document.getElementById("stepLabel")?.textContent || 0));
 ok(`重新載入後 ${after} 步`, after >= 80, `after=${after}`);
 
+console.log("⑦ ⛶ 全螢幕鈕(0827 使用者:兩站都要)");
+{
+  const n = await page.locator("#fullscreenButton").count();
+  ok(`側欄有 ⛶ 全螢幕鈕,而且只有一顆(${n})`, n === 1, String(n));
+  /* ⚠ 不驗「按下去真的全螢幕」——headless Chromium 的全螢幕行為跟真手機不同,
+     驗了只會得到一個跟現場無關的綠燈。這裡只驗「鈕在、id 不撞、按了不炸」。 */
+  await page.locator("#fullscreenButton").click().catch(() => {});
+  await sleep(300);
+}
+
 console.log("⑥ 步數里程碑 + 足跡面板(熱圖 / 月報卡 / 可攜匯出)");
 {
   /* ⚠ 上一項 reload 過 ⇒ 現在人在首頁,而首頁會蓋住步數卡(click 會一直重試到 timeout)。
